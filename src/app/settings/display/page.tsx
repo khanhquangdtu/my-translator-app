@@ -64,7 +64,7 @@ export default function DisplaySettings() {
         />
         <Row
           label="Max lines kept"
-          sub="Older lines still saved to the transcript"
+          sub="Older lines stay one “View more” away"
           value={String(prefs.maxLinesKept)}
           chevron
           onPress={() =>

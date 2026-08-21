@@ -40,7 +40,7 @@ export type Prefs = {
 
   /** transcript type size, clamped to the range in theme/tokens */
   fontSize: number;
-  /** how many turns stay on screen; older ones remain in the saved transcript */
+  /** how many turns render at once; older ones are a "view more" press away */
   maxLinesKept: number;
   viewMode: ViewMode;
 
@@ -91,7 +91,15 @@ const DEFAULTS: Prefs = {
   customContext: null,
 
   fontSize: DEFAULT_TRANSCRIPT_SIZE,
-  maxLinesKept: 300,
+  /*
+   * Low on purpose, now that "view more" exists. This number used to be the
+   * only way back to an older line, so it had to be generous; the transcript
+   * pages backwards on demand instead, and what is left for it to decide is
+   * how many nodes the browser lays out at once — where less is simply
+   * faster. The lines above it are still on screen a press away, and still in
+   * the saved transcript either way.
+   */
+  maxLinesKept: 100,
   viewMode: 'stream',
 
   speakerDetection: true,
