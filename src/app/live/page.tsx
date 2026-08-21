@@ -44,9 +44,12 @@ import { Sheet, SheetGroup, SheetItem, SheetNote, SheetSeparator } from '@/compo
 import { MAX_PANELS, SpeakerPanels, type Panel } from '@/components/SpeakerPanels';
 import { NewestDivider, TurnView, type TurnLine, type TurnState } from '@/components/Turn';
 import { shortCode } from '@/data/languages';
+import type { Segment } from '@/lib/sessions/format';
 import { useWindowSize } from '@/hooks/useWindowSize';
 import { hasOpenAIKey } from '@/lib/config/capabilities';
 import { MOCK_ENABLED } from '@/lib/engine/mock';
+import { readSegmentRange } from '@/lib/sessions/history';
+import { nextPage, splitWindow } from '@/lib/sessions/window';
 import { copyToClipboard, lockLandscape, unlockOrientation } from '@/lib/platform';
 import { estimateCost, speakerDisplayName, useLive, type Turn } from '@/state/liveStore';
 import { resolveLanguage, useSettings } from '@/state/settingsStore';
@@ -75,6 +78,35 @@ const RUN_GAP_MS = 30_000;
 /** Slack for "the reader is still pinned to the newest line". */
 const FOLLOW_SLACK_PX = 24;
 
+/** Lines added per press of "View more". */
+const PAGE_SIZE = 100;
+
+/**
+ * Renders a saved segment as a turn.
+ *
+ * Ids go negative so they cannot collide with live ones, and `createdAt` is
+ * zero because the record does not keep wall-clock times — only the "MM:SS"
+ * stamp that is displayed. The consequence is deliberate: history groups by
+ * speaker alone, since the silence-gap rule has nothing to measure, and the
+ * step up to a real timestamp guarantees a block break where history meets the
+ * live window, which is where one belongs anyway.
+ */
+function historyTurn(segment: Segment, index: number, speakerOrder: string[]): Turn {
+  return {
+    id: -(index + 1),
+    speaker: segment.speaker ?? null,
+    // Same lookup the live turns got, so a speaker keeps one rail colour all
+    // the way down the transcript.
+    speakerIndex: segment.speaker ? Math.max(0, speakerOrder.indexOf(segment.speaker)) : 0,
+    language: null,
+    src: segment.src,
+    dst: segment.tgt,
+    pending: false,
+    createdAt: 0,
+    ts: segment.ts,
+  };
+}
+
 type StartAlert = { title: string; message: string } | null;
 
 /**
@@ -100,6 +132,8 @@ export default function LiveScreen() {
   const running = useLive((s) => s.running);
   const status = useLive((s) => s.status);
   const turns = useLive((s) => s.turns);
+  const droppedSegments = useLive((s) => s.droppedSegments);
+  const sessionId = useLive((s) => s.sessionId);
   const provisional = useLive((s) => s.provisional);
   const error = useLive((s) => s.error);
   const reconnectAttempt = useLive((s) => s.reconnectAttempt);
@@ -162,9 +196,52 @@ export default function LiveScreen() {
     if (landscape) noteInteraction();
   }, [landscape, noteInteraction]);
 
+  /*
+   * "View more" pages backwards past the live window.
+   *
+   * `shown` counts lines, not sources: the first pages come out of `turns`,
+   * which holds more than the screen renders, and only past that does the
+   * autosaved record get read. Keeping one number for both means the button
+   * behaves the same either side of that boundary, and the reader never learns
+   * where it is.
+   */
+  const [shown, setShown] = useState(prefs.maxLinesKept);
+  const [history, setHistory] = useState<Segment[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // A new session starts at the top again; anything loaded belonged to the old one.
+  useEffect(() => {
+    setShown(prefs.maxLinesKept);
+    setHistory([]);
+  }, [sessionId, prefs.maxLinesKept]);
+
+  const { fromMemory, fromHistory, remaining } = splitWindow(shown, turns.length, droppedSegments);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore) return;
+    const { want, need, start, end } = nextPage(shown, PAGE_SIZE, turns.length, droppedSegments);
+
+    if (need > history.length && sessionId) {
+      setLoadingMore(true);
+      try {
+        // Autosave is on a timer; the lines being asked for may be newer than
+        // its last run. Flushing first is what makes the offsets line up.
+        await session.persist();
+        setHistory(await readSegmentRange(sessionId, start, end));
+      } finally {
+        setLoadingMore(false);
+      }
+    }
+    setShown(want);
+  }, [droppedSegments, history.length, loadingMore, session, sessionId, shown, turns.length]);
+
   // ── list data: newest first ────────────────────────────────────────
   const items = useMemo<ListItem[]>(() => {
-    const visible = turns.slice(-prefs.maxLinesKept);
+    const older =
+      fromHistory > 0
+        ? history.slice(-fromHistory).map((seg, i) => historyTurn(seg, i, speakerOrder))
+        : [];
+    const visible = [...older, ...turns.slice(-fromMemory)];
     const list: ListItem[] = [];
     let run: ListItem | null = null;
 
@@ -218,7 +295,7 @@ export default function LiveScreen() {
     }
 
     return list;
-  }, [turns, provisional, prefs.maxLinesKept]);
+  }, [turns, provisional, history, fromHistory, fromMemory, speakerOrder]);
 
   /**
    * Follow the newest line while the reader is at the top; hold their place in
@@ -493,6 +570,16 @@ export default function LiveScreen() {
           item.turns.length > 0 ? `b${item.turns[item.turns.length - 1].turn.id}` : 'provisional'
         )
       )}
+      {/* At the bottom because the stream runs newest-first: down is backwards. */}
+      {remaining > 0 ? (
+        <button
+          type="button"
+          className={styles.viewMore}
+          disabled={loadingMore}
+          onClick={() => void loadMore()}>
+          {loadingMore ? 'Loading…' : `View more (${remaining} older)`}
+        </button>
+      ) : null}
     </div>
   );
 

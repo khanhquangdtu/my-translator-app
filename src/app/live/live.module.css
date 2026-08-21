@@ -51,6 +51,33 @@
 }
 
 /*
+ * Sits at the foot of the stream, where "older" is. Full width and quiet:
+ * it is a boundary marker the reader may want, not an action the screen is
+ * asking for, and the transcript above it is the thing to look at.
+ */
+.viewMore {
+  flex: 0 0 auto;
+  align-self: stretch;
+  margin-top: 4px;
+  padding: 11px 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: var(--hairline) solid var(--border-subtle);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.viewMore:active {
+  opacity: 0.6;
+}
+
+.viewMore:disabled {
+  color: var(--text-muted);
+}
+
+/*
  * `stickyHeaderIndices={[0]}` on mobile. `overflow-anchor: none` keeps the
  * browser from choosing the divider as its scroll anchor — it never moves, so
  * anchoring to it would defeat the compensation that holds the reader's place

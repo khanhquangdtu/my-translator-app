@@ -35,6 +35,16 @@ const STALE_PENDING_MS = 10000;
 /** More than this many unmatched turns means pairing has drifted; flush oldest. */
 const MAX_PENDING = 3;
 
+/**
+ * How many turns stay in memory. Above this the oldest are banked as segments
+ * and dropped, so a four-hour session costs the same as a four-minute one.
+ *
+ * Comfortably above the 900 ceiling of the Display setting's "lines kept", so
+ * the window the screen may ask to render is always still here; "view more"
+ * beyond it reads the autosaved record instead.
+ */
+const MEMORY_TURNS = 1000;
+
 export type Turn = {
   id: number;
   speaker: string | null;
@@ -64,6 +74,10 @@ type LiveState = {
   reconnectAttempt: number;
   reconnectMax: number;
 
+  /**
+   * The live window, not the whole session. Older turns are banked into
+   * `bankedSegments` and dropped — see `bankSettledPrefix`.
+   */
   turns: Turn[];
   provisional: Provisional | null;
 
@@ -93,6 +107,18 @@ type LiveState = {
   currentChunk: Chunk | null;
   /** first turn id belonging to the current chunk */
   chunkStartTurnId: number;
+  /**
+   * Segments of the current chunk whose turns have already left `turns`.
+   * Prepended to whatever the live window still holds when the chunk is
+   * written, so trimming memory never costs the transcript a line.
+   */
+  bankedSegments: Segment[];
+  /**
+   * How many of this session's segments are no longer in memory. The Live
+   * screen uses it both to know that a "view more" exists and to page the
+   * saved record backwards from the right place.
+   */
+  droppedSegments: number;
   /** bumped on every change; compared against the last persisted value */
   revision: number;
 
@@ -153,6 +179,8 @@ export const useLive = create<LiveState>()((set, get) => ({
   chunks: [],
   currentChunk: null,
   chunkStartTurnId: 1,
+  bankedSegments: [],
+  droppedSegments: 0,
   revision: 0,
 
   beginSession: () => {
@@ -169,6 +197,8 @@ export const useLive = create<LiveState>()((set, get) => ({
       lastLoudAtSec: 0,
       lastInteractionSec: 0,
       chunkStartTurnId: nextTurnId,
+      bankedSegments: [],
+      droppedSegments: 0,
       revision: 0,
     });
   },
@@ -178,6 +208,9 @@ export const useLive = create<LiveState>()((set, get) => ({
     set({
       currentChunk: { started_at: new Date().toISOString(), ended_at: null, segments: [] },
       chunkStartTurnId: nextTurnId,
+      // Banked segments belong to one chunk; `droppedSegments` spans the
+      // session and deliberately survives here.
+      bankedSegments: [],
       startedAt: Date.now(),
       lastLoudAtSec: get().elapsedSec,
       lastInteractionSec: get().elapsedSec,
@@ -196,9 +229,13 @@ export const useLive = create<LiveState>()((set, get) => ({
         {
           ...state.currentChunk,
           ended_at: new Date().toISOString(),
-          segments: segmentsSince(state.turns, state.chunkStartTurnId),
+          segments: [
+            ...state.bankedSegments,
+            ...segmentsSince(state.turns, state.chunkStartTurnId),
+          ],
         },
       ],
+      bankedSegments: [],
       currentChunk: null,
       startedAt: null,
       accumulatedSec: banked,
@@ -249,7 +286,17 @@ export const useLive = create<LiveState>()((set, get) => ({
       ? { ...state.turnCounts, [speaker]: (state.turnCounts[speaker] ?? 0) + 1 }
       : state.turnCounts;
 
-    set({ turns: [...turns, turn], speakerOrder, turnCounts, revision: state.revision + 1 });
+    set({
+      ...bankSettledPrefix(
+        [...turns, turn],
+        state.bankedSegments,
+        state.droppedSegments,
+        state.chunkStartTurnId
+      ),
+      speakerOrder,
+      turnCounts,
+      revision: state.revision + 1,
+    });
   },
 
   addTranslation: (text) => {
@@ -269,13 +316,31 @@ export const useLive = create<LiveState>()((set, get) => ({
         createdAt: Date.now(),
         ts: elapsedStamp(state.startedAt),
       };
-      set({ turns: [...state.turns, turn], revision: state.revision + 1 });
+      set({
+        ...bankSettledPrefix(
+          [...state.turns, turn],
+          state.bankedSegments,
+          state.droppedSegments,
+          state.chunkStartTurnId
+        ),
+        revision: state.revision + 1,
+      });
       return;
     }
 
     const turns = [...state.turns];
     turns[index] = { ...turns[index], dst: text, pending: false };
-    set({ turns, revision: state.revision + 1 });
+    // Settling can unblock a prefix that banking had to stop at, so try again
+    // here rather than waiting for the next source turn to arrive.
+    set({
+      ...bankSettledPrefix(
+        turns,
+        state.bankedSegments,
+        state.droppedSegments,
+        state.chunkStartTurnId
+      ),
+      revision: state.revision + 1,
+    });
   },
 
   setProvisional: (text, speaker, language) => {
@@ -344,11 +409,28 @@ export const useLive = create<LiveState>()((set, get) => ({
     const speakerNames = { ...state.speakerNames };
     delete speakerNames[from];
 
+    /*
+     * Segments already written carry their own copy of the speaker id, so a
+     * merge has to reach them too — otherwise the half of the transcript that
+     * has left memory keeps pointing at a speaker the roster no longer has.
+     * Chunks closed by an earlier pause were always in that position; banking
+     * simply makes it reachable sooner.
+     */
+    const remap = (segments: Segment[]) =>
+      segments.some((seg) => seg.speaker === from)
+        ? segments.map((seg) => (seg.speaker === from ? { ...seg, speaker: into } : seg))
+        : segments;
+
     set({
       turns,
       turnCounts,
       speakerNames,
       speakerOrder: state.speakerOrder.filter((s) => s !== from),
+      bankedSegments: remap(state.bankedSegments),
+      chunks: state.chunks.map((chunk) => {
+        const segments = remap(chunk.segments);
+        return segments === chunk.segments ? chunk : { ...chunk, segments };
+      }),
       revision: state.revision + 1,
     });
   },
@@ -376,6 +458,8 @@ export const useLive = create<LiveState>()((set, get) => ({
       chunks: [],
       currentChunk: null,
       chunkStartTurnId: nextTurnId,
+      bankedSegments: [],
+      droppedSegments: 0,
       revision: 0,
     }),
 
@@ -389,7 +473,10 @@ export const useLive = create<LiveState>()((set, get) => ({
           {
             ...state.currentChunk,
             ended_at: new Date().toISOString(),
-            segments: segmentsSince(state.turns, state.chunkStartTurnId),
+            segments: [
+              ...state.bankedSegments,
+              ...segmentsSince(state.turns, state.chunkStartTurnId),
+            ],
           },
         ]
       : state.chunks;
@@ -418,7 +505,58 @@ export const useLive = create<LiveState>()((set, get) => ({
 function segmentsSince(turns: Turn[], fromTurnId: number): Segment[] {
   return turns
     .filter((t) => t.id >= fromTurnId && (t.src || t.dst))
-    .map((t) => ({ ts: t.ts, src: t.src, tgt: t.dst, speaker: t.speaker }));
+    .map(toSegment);
+}
+
+function toSegment(turn: Turn): Segment {
+  return { ts: turn.ts, src: turn.src, tgt: turn.dst, speaker: turn.speaker };
+}
+
+/**
+ * Moves the oldest turns out of memory once the window overflows, converting
+ * them to segments on the way.
+ *
+ * Only a **settled prefix** is taken, and only from the front. Order is the
+ * whole point: a translation that arrives without a source is appended as an
+ * already-settled turn while an older one is still pending, so banking turns as
+ * they settle would file them out of sequence. Stopping at the first pending
+ * turn also cannot stall — `STALE_PENDING_MS` settles it within ten seconds
+ * either way, and the next call picks up where this one stopped.
+ *
+ * Turns older than `chunkStartTurnId` belong to a chunk that has already been
+ * written, so they are dropped rather than banked; that is the same rule
+ * `segmentsSince` applies.
+ */
+function bankSettledPrefix(
+  turns: Turn[],
+  banked: Segment[],
+  droppedSegments: number,
+  chunkStartTurnId: number
+): { turns: Turn[]; bankedSegments: Segment[]; droppedSegments: number } {
+  const excess = turns.length - MEMORY_TURNS;
+  if (excess <= 0) return { turns, bankedSegments: banked, droppedSegments };
+
+  let cut = 0;
+  let dropped = 0;
+  const moved: Segment[] = [];
+  while (cut < excess && !turns[cut].pending) {
+    const turn = turns[cut];
+    if (turn.src || turn.dst) {
+      // Counted for every chunk, banked only for the open one: the count is
+      // what tells the screen how far back the saved record goes, and a turn
+      // from an already-written chunk has left memory just the same.
+      dropped++;
+      if (turn.id >= chunkStartTurnId) moved.push(toSegment(turn));
+    }
+    cut++;
+  }
+  if (cut === 0) return { turns, bankedSegments: banked, droppedSegments };
+
+  return {
+    turns: turns.slice(cut),
+    bankedSegments: moved.length ? [...banked, ...moved] : banked,
+    droppedSegments: droppedSegments + dropped,
+  };
 }
 
 /**

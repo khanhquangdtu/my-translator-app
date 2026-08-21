@@ -210,5 +210,20 @@ export function useSession() {
     };
   }, []);
 
-  return { start, stop, keepSession, discardSession, retry, inputSampleRate: mic.inputSampleRate };
+  return {
+    start,
+    stop,
+    keepSession,
+    discardSession,
+    retry,
+    /**
+     * Brings the autosaved record up to date on demand.
+     *
+     * "View more" reads the transcript back out of that record, and autosave is
+     * on a fifteen-second timer — so without this the oldest lines a reader
+     * asks for can be ones the record has not been told about yet.
+     */
+    persist,
+    inputSampleRate: mic.inputSampleRate,
+  };
 }
