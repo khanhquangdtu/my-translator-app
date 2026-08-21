@@ -21,13 +21,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { ChevronDownIcon, ChevronLeftIcon, InstallIcon } from '@/components/icons';
+import { ChevronDownIcon, ChevronLeftIcon } from '@/components/icons';
+import { InstallButton } from '@/components/InstallButton';
 import { StaticMeter } from '@/components/meter';
 import { PlacementDiagram } from '@/components/PlacementDiagram';
-import { AppBar, AppBarButton, AppBarIcon, AppBarTitle, Cta, cx } from '@/components/primitives';
+import { AppBar, AppBarIcon, AppBarTitle, Cta, cx } from '@/components/primitives';
 import { ActionBar, Screen, ScreenBody } from '@/components/Screen';
 import { languageName } from '@/data/languages';
-import { useInstallPrompt } from '@/hooks/useInstallPrompt';
 import { AUTO, deviceLanguage, useSettings } from '@/state/settingsStore';
 import { color } from '@/theme/tokens';
 
@@ -45,7 +45,6 @@ export default function Onboarding() {
   const onboarded = prefs.onboarded;
 
   const [permissionDenied, setPermissionDenied] = useState(false);
-  const { canInstall, install } = useInstallPrompt();
 
   const finish = () => {
     setPref('onboarded', true);
@@ -80,17 +79,8 @@ export default function Onboarding() {
         ) : null}
         <AppBarTitle>{step === 1 ? 'Let the phone listen' : 'Default languages'}</AppBarTitle>
         {/* `/` lands here on a device that has not onboarded, so this is the
-            first screen most people ever see — and the one they are most likely
-            to be looking at when they decide they want the app on the home
-            screen rather than in a tab. */}
-        {canInstall ? (
-          <AppBarButton
-            glyph={(tint) => <InstallIcon color={tint} />}
-            accessibilityLabel="Install this app on your device"
-            onPress={() => void install()}>
-            Install app
-          </AppBarButton>
-        ) : null}
+            first screen most people ever see. */}
+        <InstallButton />
         <span className={styles.stepCounter}>
           {step}/{LAST_STEP}
         </span>

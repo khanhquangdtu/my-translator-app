@@ -22,11 +22,11 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { AlertDialog } from '@/components/AlertDialog';
-import { HomeIcon, InstallIcon, LibraryIcon, SettingsIcon } from '@/components/icons';
+import { HomeIcon, LibraryIcon, SettingsIcon } from '@/components/icons';
+import { InstallButton } from '@/components/InstallButton';
 import { IdleWave, LevelMeter } from '@/components/meter';
 import {
   AppBar,
-  AppBarButton,
   AppBarIcon,
   AppBarTitle,
   Banner,
@@ -44,7 +44,6 @@ import { Sheet, SheetGroup, SheetItem, SheetNote, SheetSeparator } from '@/compo
 import { MAX_PANELS, SpeakerPanels, type Panel } from '@/components/SpeakerPanels';
 import { NewestDivider, TurnView, type TurnLine, type TurnState } from '@/components/Turn';
 import { shortCode } from '@/data/languages';
-import { useInstallPrompt } from '@/hooks/useInstallPrompt';
 import { useWindowSize } from '@/hooks/useWindowSize';
 import { hasOpenAIKey } from '@/lib/config/capabilities';
 import { MOCK_ENABLED } from '@/lib/engine/mock';
@@ -93,7 +92,6 @@ type ListItem = {
 export default function LiveScreen() {
   const router = useRouter();
   const { landscape } = useWindowSize();
-  const { canInstall, install } = useInstallPrompt();
 
   const prefs = useSettings((s) => s.prefs);
   const setPref = useSettings((s) => s.set);
@@ -550,17 +548,7 @@ export default function LiveScreen() {
         />
         <StatusDot tone={dotTone} pulse={running} />
         <AppBarTitle muted={!running}>{statusTitle}</AppBarTitle>
-        {/* Present for as long as the browser will take the offer, session
-            running or not — `canInstall` is already false once the app is
-            installed, so this never shows to someone who has no use for it. */}
-        {canInstall ? (
-          <AppBarButton
-            glyph={(tint) => <InstallIcon color={tint} />}
-            accessibilityLabel="Install this app on your device"
-            onPress={() => void install()}>
-            Install app
-          </AppBarButton>
-        ) : null}
+        <InstallButton />
         {running ? (
           <span className={styles.meterLine}>
             <span className={styles.meterStrong}>{formatElapsed(elapsedSec)}</span>
