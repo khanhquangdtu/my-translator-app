@@ -1,0 +1,119 @@
+.turn {
+  padding-left: 11px;
+  border-left: 2px solid transparent;
+}
+
+/*
+ * Top-aligned, so the chip's slot lines up with the first line of the block
+ * rather than with the middle of a three-line one.
+ */
+.headline {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/*
+ * The slot is exactly one line tall and centres the chip inside it. Since the
+ * row is top-aligned, the slot and the first line occupy the same band, and
+ * both stay centred on the same axis at every transcript size. No per-size
+ * offset to tune.
+ */
+.speakerSlot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+/*
+ * The name chip. A real box, not a background on a nested text run: the mobile
+ * version needed a <View> for the same reason CSS needs `display: inline-flex`
+ * here — a run of text takes a flat background but not a radius and padding.
+ */
+.speakerPill {
+  display: inline-flex;
+  background: var(--bg-input);
+  border-radius: var(--radius-pill);
+  padding: 2px 7px;
+}
+
+.speakerPillOld {
+  opacity: 0.55;
+}
+
+/*
+ * Sized independently of the transcript scale: the name is a tag, and letting
+ * it grow with 48pt body text would turn it into a headline. The slot around it
+ * does track the line, which is what keeps the two centred on each other.
+ */
+.speaker {
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+/*
+ * Every line in the run shares this column, so they stay flush with one another
+ * instead of the first being indented past the chip on its own. The 6 is
+ * deliberately tighter than the 16 the list puts between blocks: inside a run
+ * these lines are one thought.
+ *
+ * `min-width: 0` is the CSS-only part: without it a long unbroken word would
+ * refuse to shrink and would push the column past the rail.
+ */
+.lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.line {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+  background: none;
+}
+
+.linePressable:active {
+  opacity: 0.6;
+}
+
+.dst {
+  font-weight: 400;
+  overflow-wrap: break-word;
+}
+
+.src {
+  font-weight: 400;
+  overflow-wrap: break-word;
+}
+
+/* "NEWEST" label with a hairline rule filling the rest of the width. */
+.newest {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 6px var(--gutter);
+  /* Opaque: this is the sticky header, and the stream scrolls under it. */
+  background: var(--bg-primary);
+}
+
+.newestLabel {
+  font-weight: 400;
+  font-size: 9.5px;
+  letter-spacing: 1.1px;
+  color: var(--text-muted);
+}
+
+.newestRule {
+  flex: 1;
+  height: var(--hairline);
+  background: var(--border-subtle);
+}

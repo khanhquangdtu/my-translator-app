@@ -1,0 +1,133 @@
+.body {
+  padding-top: 12px;
+  padding-bottom: 24px;
+}
+
+.stepCounter {
+  flex: 0 0 auto;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lede {
+  display: block;
+  font-weight: 400;
+  font-size: 13.5px;
+  line-height: 21px;
+  color: var(--text-secondary);
+  padding: 2px var(--gutter) 0;
+}
+
+.strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tips {
+  padding: 14px var(--gutter) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.tip {
+  display: flex;
+  flex-direction: row;
+  gap: 11px;
+}
+
+.tipGlyph {
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+
+.tipText {
+  flex: 1;
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 19.5px;
+  color: var(--text-secondary);
+}
+
+.card {
+  margin: 16px var(--gutter) 0;
+  padding: 11px 13px;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: var(--hairline) solid var(--border-subtle);
+}
+
+.meterRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.meterLabel {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--success);
+}
+
+.cardNote {
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 7px;
+  line-height: 17px;
+}
+
+.secLabel {
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  padding: 18px var(--gutter) 6px;
+}
+
+.selectWrap {
+  padding: 0 var(--gutter);
+}
+
+.select {
+  width: 100%;
+  height: 42px;
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  border: var(--hairline) solid var(--border-subtle);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+}
+
+.selectHighlighted {
+  border-color: var(--accent-border);
+}
+
+.select:active {
+  opacity: 0.7;
+}
+
+.selectLabel {
+  flex: 1;
+  min-width: 0;
+  font-weight: 400;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note {
+  display: block;
+  font-weight: 400;
+  font-size: 11.5px;
+  line-height: 17.5px;
+  color: var(--text-muted);
+  padding: 7px var(--gutter) 0;
+}

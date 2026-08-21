@@ -1,0 +1,77 @@
+/*
+ * Bottom-aligned, not centred: the column is taller than the labels by the
+ * strip reserved for the readout, and centring would float the signposts above
+ * the track they label.
+ */
+.wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 6px var(--gutter) 14px;
+}
+
+/* 8px lifts the label's centre onto the track's centre line. */
+.edgeLabel {
+  flex: 0 0 auto;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding-bottom: 8px;
+}
+
+.column {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.value {
+  position: absolute;
+  top: 0;
+  width: 52px;
+  text-align: center;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Extra vertical room so the 4px track is still an easy touch target. */
+.trackHit {
+  position: relative;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  margin-top: 17px;
+  /* The drag is horizontal; the settings list still scrolls vertically. */
+  touch-action: pan-y;
+}
+
+.track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-input);
+}
+
+.fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.thumb {
+  position: absolute;
+  top: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}

@@ -1,0 +1,102 @@
+/*
+ * CSS mirror of src/theme/tokens.ts.
+ *
+ * Same values, same names, kebab-cased. CSS Modules read these; TypeScript
+ * reads tokens.ts. Change one and you must change the other — they are two
+ * views of the same mockup, not two sources of truth.
+ */
+
+:root {
+  /* surfaces */
+  --page: #08080c;
+  --bg-primary: #0f0f14;
+  --bg-secondary: #191923;
+  --bg-input: #282837;
+  --bg-glass: #1e1e2d;
+  --bg-hover: #3c3c50;
+  --bg-sheet: #14141c;
+  --bg-danger: #26191d;
+
+  /* borders */
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-light: rgba(255, 255, 255, 0.12);
+
+  /* text */
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-muted: rgba(255, 255, 255, 0.35);
+  --text-provisional: rgba(255, 255, 255, 0.4);
+  --text-old: rgba(255, 255, 255, 0.62);
+  --text-old-src: rgba(255, 255, 255, 0.26);
+  --text-live-src: rgba(255, 255, 255, 0.24);
+
+  /* accent + semantic */
+  --accent: #638cff;
+  --accent-glow: rgba(99, 140, 255, 0.15);
+  --accent-border: rgba(99, 140, 255, 0.4);
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --error: #f87171;
+
+  /* banner tints */
+  --warn-bg: rgba(251, 191, 36, 0.1);
+  --warn-border: rgba(251, 191, 36, 0.3);
+  --warn-text: #fde68a;
+  --warn-soft-bg: rgba(251, 191, 36, 0.07);
+  --warn-soft-border: rgba(251, 191, 36, 0.18);
+  --err-bg: rgba(248, 113, 113, 0.1);
+  --err-border: rgba(248, 113, 113, 0.32);
+  --err-text: #fecaca;
+
+  --scrim: rgba(0, 0, 0, 0.55);
+
+  /* radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* 4pt grid */
+  --gutter: 18px;
+  --appbar-h: 44px;
+  --cta-h: 48px;
+  --touch: 48px;
+
+  /* motion */
+  --motion-fast: 150ms;
+  --motion-normal: 250ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /*
+   * StyleSheet.hairlineWidth. On a phone at DPR 2-3 this is a sub-pixel line;
+   * the media query below matches what the native app actually draws.
+   */
+  --hairline: 1px;
+
+  /*
+   * Safe-area insets. Every screen does arithmetic on these (the action bar is
+   * `14 + insets.bottom`), so they are surfaced as variables rather than being
+   * applied ad hoc, and useInsets() reads the same numbers in JS.
+   */
+  --inset-top: env(safe-area-inset-top, 0px);
+  --inset-bottom: env(safe-area-inset-bottom, 0px);
+  --inset-left: env(safe-area-inset-left, 0px);
+  --inset-right: env(safe-area-inset-right, 0px);
+
+  /* speaker rails, index mod 4 */
+  --rail-0: #638cff;
+  --rail-1: #4ade80;
+  --rail-2: #fbbf24;
+  --rail-3: #c084fc;
+  --label-0: #8aa8ff;
+  --label-1: #7ee0a4;
+  --label-2: #fcd063;
+  --label-3: #d3a6fd;
+}
+
+@media (min-resolution: 2dppx) {
+  :root {
+    --hairline: 0.5px;
+  }
+}

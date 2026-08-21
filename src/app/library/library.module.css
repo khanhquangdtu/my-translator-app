@@ -1,0 +1,105 @@
+.search {
+  flex: 0 0 auto;
+  margin: 10px 14px 4px;
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.emptyText {
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.list {
+  padding-bottom: calc(var(--inset-bottom) + 24px);
+}
+
+.dayLabel {
+  font-weight: 400;
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  padding: 16px var(--gutter) 6px;
+}
+
+.row {
+  display: block;
+  width: 100%;
+  padding: 13px var(--gutter);
+  border-bottom: var(--hairline) solid var(--border-subtle);
+}
+
+.row:active {
+  background: var(--bg-secondary);
+}
+
+.titleRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  font-size: 14.5px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Padding plus an expanded hit area: the glyph is 15px but the target has to be
+ * thumbable without swallowing the row's own tap.
+ */
+.pencil {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 4px;
+  display: flex;
+}
+
+.pencil::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+}
+
+.pencil:active {
+  opacity: 0.5;
+}
+
+.meta {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.metaDot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.metaText {
+  flex: 1;
+  min-width: 0;
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}

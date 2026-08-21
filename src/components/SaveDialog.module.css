@@ -1,0 +1,118 @@
+/*
+ * Note what is missing: the scrim is not a button and there is no Escape
+ * handler. This dialog cannot be dismissed without choosing — the whole point
+ * of Stop being a decision point is that neither outcome happens by accident.
+ */
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+}
+
+.centerWrap {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 22px;
+  pointer-events: none;
+}
+
+.dialog {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 420px;
+  /* A one-off, not a token: this card sits above a scrim over the transcript
+     and needs to read a shade lighter than --bg-sheet does against it. */
+  background: #17171f;
+  border: var(--hairline) solid var(--border-light);
+  border-radius: var(--radius-xl);
+  padding: 20px 18px 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+}
+
+.title {
+  font-weight: 600;
+  font-size: 16.5px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.sub {
+  font-weight: 400;
+  font-size: 12.5px;
+  line-height: 19px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.fine {
+  font-weight: 400;
+  font-size: 11px;
+  line-height: 16.5px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+
+.fineStrong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/*
+ * Naming is optional and sits right above the verdict buttons: a name is worth
+ * far more at the moment the meeting is fresh than in the Library a day later.
+ */
+.nameField {
+  margin-bottom: 12px;
+}
+
+.pencil {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.btns {
+  display: flex;
+  flex-direction: row;
+  gap: 9px;
+}
+
+.btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 0;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.discard {
+  background: var(--bg-input);
+  border: var(--hairline) solid var(--border-light);
+  color: var(--error);
+}
+
+.discard:active {
+  opacity: 0.7;
+}
+
+.keep {
+  background: var(--accent);
+  color: #fff;
+}
+
+.keep:active {
+  opacity: 0.85;
+}
+
+.footnote {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 10px;
+}

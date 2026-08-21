@@ -1,0 +1,73 @@
+/* Shared geometry for ConfirmDialog and PromptDialog; SaveDialog overrides. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: var(--scrim);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease);
+}
+
+.scrimOpen {
+  opacity: 1;
+}
+
+.centerWrap {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  /* The scrim behind it takes the dismiss tap; only the card is interactive. */
+  pointer-events: none;
+}
+
+.card {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-sheet);
+  border-radius: var(--radius-xl);
+  border: var(--hairline) solid var(--border-light);
+  padding: var(--gutter);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease);
+}
+
+.cardOpen {
+  opacity: 1;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.message {
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--text-secondary);
+}
+
+.actions {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.footnote {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}

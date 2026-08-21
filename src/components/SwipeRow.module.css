@@ -1,0 +1,54 @@
+.wrap {
+  position: relative;
+  background: var(--bg-danger);
+}
+
+/*
+ * Pinned to the right edge and OVERSHOOT wider than the button, so dragging
+ * past the stop reveals more panel rather than a gap.
+ *
+ * The button hugs the *right* edge, not the layer's left one: at rest the row
+ * slides exactly ACTION_W, so only the rightmost ACTION_W of this layer is
+ * uncovered. Left-aligning it put the button OVERSHOOT too far left — its
+ * leading edge stayed under the row and an empty strip of panel showed on the
+ * right. Right-aligned, the button fills the revealed slot exactly, and the
+ * overshoot spills out as extra panel behind it.
+ */
+.actionLayer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 116px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.action {
+  width: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  font-size: 11.5px;
+  color: var(--error);
+}
+
+.action:active {
+  opacity: 0.6;
+}
+
+/*
+ * Opaque: the panel sits directly behind it and must not bleed through.
+ * `touch-action: pan-y` is what makes the row lose to a vertical scroll — the
+ * browser keeps the scroll and only sends us the horizontal movement, which is
+ * the same division of labour `activeOffsetX`/`failOffsetY` bought on mobile.
+ */
+.front {
+  position: relative;
+  background: var(--bg-primary);
+  touch-action: pan-y;
+}

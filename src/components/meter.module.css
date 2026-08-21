@@ -1,0 +1,27 @@
+/* Bars are 4 wide with a 3 gap and a 2 radius in both widgets. */
+.bar {
+  width: 4px;
+  border-radius: 2px;
+}
+
+/* Bottom-aligned: it reads as a level. */
+.meter {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+/* Centre-aligned: it reads as a waveform. */
+.wave {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  height: 34px;
+  opacity: 0.25;
+}
+
+.waveActive {
+  opacity: 1;
+}

@@ -1,0 +1,72 @@
+/*
+ * Every screen in the app is the same frame: full height, page-coloured, the
+ * safe-area top padded out, and its own scrolling handled inside. On mobile
+ * this was `View { flex: 1, backgroundColor, paddingTop: insets.top }` repeated
+ * on each screen; here it is one class.
+ */
+.screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-primary);
+  padding-top: var(--inset-top);
+  overflow: hidden;
+}
+
+/*
+ * Route transitions, standing in for expo-router's `animation` option.
+ * `slide_from_right` was the stack default; the language picker was the one
+ * screen presented as a modal from the bottom.
+ */
+.card {
+  animation: slideFromRight var(--motion-normal) var(--ease);
+}
+
+.modal {
+  animation: slideFromBottom var(--motion-normal) var(--ease);
+}
+
+@keyframes slideFromRight {
+  from {
+    transform: translateX(28px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideFromBottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/*
+ * The bottom action bar. Identical in Live, Library detail and onboarding — the
+ * mobile build repeated this block in all three, so it lives here once.
+ */
+.actionBar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 10px var(--gutter) calc(14px + var(--inset-bottom));
+  background: var(--bg-glass);
+  border-top: var(--hairline) solid var(--border-subtle);
+}
+
+/* The scrolling middle of a screen, between the app bar and the action bar. */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}

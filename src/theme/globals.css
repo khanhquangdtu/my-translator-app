@@ -1,0 +1,100 @@
+@import './tokens.css';
+
+/*
+ * The native app has no scrollbars, no text selection outside inputs, no
+ * double-tap zoom and no tap highlight. A browser gives you all four for free,
+ * and every one of them breaks the illusion, so they are switched off here
+ * rather than fought screen by screen.
+ */
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+body {
+  /*
+   * 100dvh, not 100vh: on mobile Safari/Chrome the URL bar collapses and a vh
+   * unit would leave the bottom action bar under it.
+   */
+  height: 100dvh;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#root-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* RN's <Text> never wraps mid-word by default and never inherits italics. */
+p,
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: inherit;
+  font-size: inherit;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Scrollers keep their scroll but lose the bar, as on the phone. */
+.noscrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.noscrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

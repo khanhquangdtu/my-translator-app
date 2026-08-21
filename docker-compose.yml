@@ -1,0 +1,67 @@
+# MongoDB, and optionally the app itself.
+#
+#   docker compose up -d                  # just MongoDB — the usual case
+#   docker compose --profile app up -d    # MongoDB + the app, built from source
+#   docker compose down                   # stop; data survives
+#   docker compose down -v                # stop and erase every saved session
+#
+# The default is Mongo alone because that is what local development needs: the
+# app runs on the host with `npm run dev` (hot reload, and the microphone works
+# because localhost is a secure context) while its database lives here.
+
+# Namespaced to this folder. Plain `my-translator` is already taken by the
+# Tauri desktop app's own compose project next door, and sharing a project name
+# makes each `docker compose` call treat the other's containers as orphans.
+name: my-translator-pwa
+
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    ports:
+      # Published so `npm run dev` on the host can reach it at
+      # mongodb://127.0.0.1:27017. Drop this line in any deployment where only
+      # the app container needs the database.
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      # The app waits on this, so it must mean "accepting queries", not merely
+      # "process started" — mongod listens well before it is ready.
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  app:
+    # Started only with `--profile app`, so the common `docker compose up -d`
+    # brings up the database and nothing else.
+    profiles: ['app']
+    build:
+      context: .
+      args:
+        # Build-time because NEXT_PUBLIC_* is inlined into the browser bundle.
+        # Set to 1 for an image that replays the scripted meeting instead of
+        # calling Soniox.
+        NEXT_PUBLIC_MOCK_ENGINE: ${NEXT_PUBLIC_MOCK_ENGINE:-}
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    env_file:
+      # The provider keys, injected at run time and never baked into the image.
+      # Optional: with no keys the app still boots — it just cannot start a
+      # session, which is a legitimate way to look at the UI.
+      - path: .env.local
+        required: false
+    environment:
+      # Overrides whatever .env.local says: inside the compose network the
+      # database is `mongo`, not localhost.
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: my_translator
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo-data:

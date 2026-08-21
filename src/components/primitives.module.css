@@ -1,0 +1,484 @@
+/*
+ * The component vocabulary of the mockup, transcribed one-for-one from the
+ * mobile StyleSheet. Every screen is assembled from these, so the measurements
+ * live here and nowhere else.
+ *
+ * Two RN-to-CSS conventions run through the whole file:
+ *  - a `Pressable`'s pressed style becomes `:active` (plus `:focus-visible`
+ *    where a keyboard user needs to see the same affordance);
+ *  - `numberOfLines={1}` becomes the `.clamp1` utility at the bottom.
+ */
+
+.txt {
+  font-weight: 400;
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+/* ─── App bar ───────────────────────────────────────────────────────── */
+
+.appBar {
+  flex: 0 0 auto;
+  height: var(--appbar-h);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: var(--hairline) solid var(--border-subtle);
+}
+
+.appBarTitle {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.appBarTitleMuted {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* 30×30 glyph slot in the app bar — distinct from the 44×44 .iconBtn. */
+.appBarIcon {
+  position: relative;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+/* RN's hitSlop={8}: the touch target grows, the painted box does not. */
+.appBarIcon::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.appBarIcon:active {
+  opacity: 0.55;
+}
+
+.appBarIconActive {
+  color: var(--accent);
+}
+
+.appBarIconGlyph {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* Labelled app-bar action. Same 30px height as .appBarIcon so the row stays
+   level, but filled like a .pill: a control with a word in it needs an edge,
+   or it reads as a caption sitting next to the title. */
+.appBarButton {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  border: var(--hairline) solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.appBarButton:active {
+  opacity: 0.55;
+}
+
+.appBarButtonLabel {
+  font-weight: 500;
+  font-size: 12.5px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+/* ─── Status dot ────────────────────────────────────────────────────── */
+
+.dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+}
+
+/* The mockup's only keyframe animation: opacity 1 → .45 → 1 over 2s. */
+.dotPulse {
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ─── Pill ──────────────────────────────────────────────────────────── */
+
+.pill {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-input);
+  border: var(--hairline) solid var(--border-subtle);
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.pillSuccess {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.pillPressable:active {
+  opacity: 0.6;
+}
+
+/* ─── Buttons ───────────────────────────────────────────────────────── */
+
+.cta {
+  flex: 1;
+  height: var(--cta-h);
+  border-radius: var(--radius-lg);
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 15.5px;
+  color: #fff;
+  /* The mockup's glow. On mobile this was an iOS shadow plus an Android
+     elevation; one box-shadow covers both. */
+  box-shadow: 0 4px 18px rgba(99, 140, 255, 0.28);
+}
+
+.ctaStop {
+  background: var(--error);
+  box-shadow: 0 4px 18px rgba(248, 113, 113, 0.25);
+}
+
+.ctaGhost {
+  background: var(--bg-input);
+  border: var(--hairline) solid var(--border-light);
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.cta:active:not(:disabled) {
+  opacity: 0.85;
+}
+
+.cta:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.iconBtn {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--bg-input);
+  border: var(--hairline) solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.iconBtnOn {
+  background: var(--accent-glow);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.iconBtnDanger {
+  color: var(--error);
+}
+
+.iconBtn:active:not(:disabled) {
+  opacity: 0.7;
+}
+
+.iconBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ─── Grouped list ──────────────────────────────────────────────────── */
+
+.secLabel {
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  padding: 18px var(--gutter) 6px;
+  text-transform: uppercase;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px var(--gutter);
+  border-bottom: var(--hairline) solid var(--border-subtle);
+  min-height: var(--touch);
+  background: transparent;
+}
+
+.rowPressable:active {
+  background: var(--bg-secondary);
+}
+
+.rowDisabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.rowGlyph {
+  flex: 0 0 auto;
+  width: 22px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.rowGlyphSelected {
+  color: var(--accent);
+}
+
+.rowMiddle {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowLabel {
+  font-weight: 400;
+  font-size: 14.5px;
+  color: var(--text-primary);
+}
+
+.rowLabelDanger {
+  color: var(--error);
+}
+
+.rowSub {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.rowValue {
+  font-weight: 400;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  text-align: right;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Switch ────────────────────────────────────────────────────────── */
+
+.switchTrack {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 25px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-hover);
+  padding: 3px;
+  display: flex;
+  align-items: center;
+}
+
+.switchTrackOn {
+  background: var(--accent);
+}
+
+.switchThumb {
+  width: 19px;
+  height: 19px;
+  border-radius: 10px;
+  background: #fff;
+  transform: translateX(0);
+  transition: transform 200ms var(--ease);
+}
+
+.switchThumbOn {
+  transform: translateX(17px);
+}
+
+/* ─── Segmented control ─────────────────────────────────────────────── */
+
+.segWrap {
+  padding: 10px var(--gutter) 4px;
+}
+
+.seg {
+  display: flex;
+  flex-direction: row;
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 3px;
+}
+
+.segItem {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+  border-radius: 7px;
+  font-weight: 400;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.segItemOn {
+  background: var(--bg-hover);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* ─── Field ─────────────────────────────────────────────────────────── */
+
+.field {
+  height: 42px;
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  border: var(--hairline) solid var(--border-subtle);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+}
+
+.fieldInput {
+  flex: 1;
+  min-width: 0;
+  font-weight: 400;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  outline: none;
+  padding: 0;
+}
+
+.fieldInput::placeholder {
+  color: var(--text-muted);
+}
+
+.fieldInputMono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 1px;
+}
+
+/* ─── Banner ────────────────────────────────────────────────────────── */
+
+.banner {
+  margin: 8px 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: var(--hairline) solid;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.bannerWarn {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: var(--warn-text);
+}
+
+.bannerWarnSoft {
+  background: var(--warn-soft-bg);
+  border-color: var(--warn-soft-border);
+  color: var(--warn-text);
+}
+
+.bannerError {
+  background: var(--err-bg);
+  border-color: var(--err-border);
+  color: var(--err-text);
+}
+
+.bannerInfo {
+  background: var(--bg-secondary);
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.bannerGlyph {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+}
+
+.bannerText {
+  flex: 1;
+  font-weight: 400;
+  font-size: 12.5px;
+  color: inherit;
+}
+
+.bannerAction {
+  position: relative;
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: inherit;
+}
+
+.bannerAction::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+/* ─── Misc ──────────────────────────────────────────────────────────── */
+
+.divider {
+  height: var(--hairline);
+  background: var(--border-subtle);
+}
+
+/* RN's numberOfLines={1}. */
+.clamp1 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

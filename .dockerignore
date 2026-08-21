@@ -1,0 +1,25 @@
+# Keys must never enter an image layer. `.env.local` holds the real Soniox and
+# OpenAI keys; they are passed in at run time instead.
+.env
+.env.*
+!.env.example
+
+node_modules
+.next
+out
+
+.git
+.gitignore
+*.tsbuildinfo
+next-env.d.ts
+
+# Only useful with a browser and a running server, neither of which exists
+# during a build.
+scripts/smoke.mjs
+scripts/e2e.mjs
+scripts/soniox-check.mjs
+
+Dockerfile
+.dockerignore
+docker-compose.yml
+README.md

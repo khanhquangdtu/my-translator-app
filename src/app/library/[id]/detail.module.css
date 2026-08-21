@@ -1,0 +1,19 @@
+.meta {
+  display: block;
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  padding-bottom: 10px;
+}
+
+.summaryPane {
+  padding-top: 10px;
+  padding-bottom: calc(var(--inset-bottom) + 12px);
+}
+
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 12px var(--gutter) calc(var(--inset-bottom) + 12px);
+}

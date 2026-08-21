@@ -1,0 +1,77 @@
+.panels {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 20px 16px;
+}
+
+.panelDivider {
+  border-left: var(--hairline) solid var(--border-subtle);
+}
+
+.head {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.headDot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 3.5px;
+}
+
+.headName {
+  flex-shrink: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.headCount {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.lines {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.line {
+  display: block;
+  font-weight: 400;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  overflow-wrap: break-word;
+}
+
+.lineLive {
+  color: var(--text-provisional);
+}
+
+/* Deliberately 55%, not the stream's --text-old: a column reads denser. */
+.lineOld {
+  color: rgba(255, 255, 255, 0.55);
+}

@@ -1,0 +1,123 @@
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease);
+  border: none;
+  width: 100%;
+  padding: 0;
+}
+
+.scrimOpen {
+  opacity: 1;
+  transition-duration: var(--motion-normal);
+}
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-sheet);
+  border-top: var(--hairline) solid var(--border-light);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding-top: 8px;
+  padding-bottom: calc(18px + var(--inset-bottom));
+  box-shadow: 0 -14px 40px rgba(0, 0, 0, 0.5);
+  transform: translateY(400px);
+  transition: transform var(--motion-fast) var(--ease);
+  max-height: 85dvh;
+  overflow-y: auto;
+}
+
+.sheetOpen {
+  transform: translateY(0);
+  transition-duration: var(--motion-normal);
+}
+
+.grab {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-light);
+  margin: 2px auto 10px;
+}
+
+.group {
+  font-weight: 400;
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  padding: 12px 20px 4px;
+  text-transform: uppercase;
+}
+
+.item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 12px 20px;
+  min-height: 48px;
+  background: transparent;
+}
+
+.item:active:not(:disabled) {
+  background: var(--bg-secondary);
+}
+
+.item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.itemGlyph {
+  flex: 0 0 auto;
+  width: 20px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.itemIcon {
+  flex: 0 0 auto;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.itemLabel {
+  flex: 1;
+  min-width: 0;
+  font-weight: 400;
+  font-size: 14.5px;
+  color: var(--text-primary);
+}
+
+.itemDanger {
+  color: var(--error);
+}
+
+.itemMeta {
+  flex: 0 0 auto;
+  font-weight: 400;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.sep {
+  height: var(--hairline);
+  background: var(--border-subtle);
+  margin: 7px 20px;
+}
+
+.note {
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--text-muted);
+  padding: 8px 20px 0;
+}
