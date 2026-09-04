@@ -13,6 +13,18 @@
   gap: 14px;
 }
 
+/*
+ * `.cta` is written for ActionBar, a row: it carries `flex: 1` to share width,
+ * plus `height: var(--cta-h)`. Dropped into this column the shorthand's
+ * `flex-basis: 0%` lands on the main axis instead, overrides that height, and
+ * the button collapses to the height of its own label -- visibly shorter than
+ * the 42px field above it. Restoring an auto basis gives the declared height
+ * back. Direct children only, so the buttons inside a Banner are untouched.
+ */
+.login > button {
+  flex: 0 0 auto;
+}
+
 .loginBlurb {
   color: var(--text-secondary);
   font-size: 13px;
