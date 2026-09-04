@@ -16,7 +16,8 @@
     "caption": "node scripts/caption-check.mjs",
     "predev:lan": "node scripts/dev-guard.mjs && node scripts/lan-url.mjs",
     "dev:lan": "next dev --hostname 0.0.0.0 --experimental-https --experimental-https-key certificates/localhost-key.pem --experimental-https-cert certificates/localhost.pem",
-    "start:lan": "node scripts/start-lan.mjs"
+    "start:lan": "node scripts/start-lan.mjs",
+    "aws": "node scripts/aws.mjs"
   },
   "dependencies": {
     "idb": "^8.0.3",

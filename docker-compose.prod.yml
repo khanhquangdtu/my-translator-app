@@ -1,0 +1,60 @@
+# Production overlay. Always used together with the base file:
+#
+#   docker compose --env-file .env.local \
+#     -f docker-compose.yml -f docker-compose.prod.yml \
+#     --profile app up -d --build
+#
+# `--env-file` is not optional. Compose interpolates ${DOMAIN} from `.env`
+# alone; without the flag it never looks at .env.local and the run aborts on
+# the `:?` guard below. That guard exists precisely so this fails loudly
+# instead of asking Let's Encrypt for a certificate for the empty string.
+#
+# The base file stays untouched because it is the local-development setup and
+# README describes it as such. Everything that is only true on a public host
+# lives here.
+#
+# Requires Compose v2.24+ for the `!reset` tag — the Docker repo install in
+# scripts/lightsail-user-data.sh is well past that.
+
+services:
+  mongo:
+    # The base file publishes 27017 so `npm run dev` on the host can reach it.
+    # On a public instance that would expose an unauthenticated database to the
+    # internet. Only `app` needs Mongo, and it reaches it over the compose
+    # network, so the host port goes away entirely.
+    ports: !reset []
+
+  app:
+    # Not published either: Caddy is the only thing that talks to the app, and
+    # it does so inside the network.
+    #
+    # Deliberately no NEXT_PUBLIC_* here: that prefix is inlined into the
+    # browser bundle at build time, so setting it at run time would be silently
+    # ignored. The app reads no origin variable anyway.
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    # Same profile as `app` so a bare `up` cannot start a proxy with nothing
+    # behind it.
+    profiles: ['app']
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      # HTTP/3. Harmless if the client never uses it.
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Holds the issued certificates. Deleting this volume forces a fresh
+      # Let's Encrypt issuance, which is rate limited — keep it.
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env.local and pass --env-file .env.local}
+    depends_on:
+      - app
+
+volumes:
+  caddy-data:
+  caddy-config:

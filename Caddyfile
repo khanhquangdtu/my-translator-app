@@ -1,0 +1,26 @@
+# Reverse proxy and TLS for the deployed app.
+#
+# The domain comes from the environment (`DOMAIN` in .env.local on the server)
+# rather than being written in here, so this file is the same in every
+# deployment and carries nothing worth keeping out of git.
+#
+# Caddy obtains and renews the Let's Encrypt certificate on its own — that is
+# the whole reason it is here instead of nginx. Certificates live in the
+# `caddy-data` volume; losing that volume means re-issuing, so do not prune it.
+
+{$DOMAIN} {
+	# WebSockets are forwarded without extra configuration, which the live
+	# transcript relies on.
+	reverse_proxy app:3000
+
+	encode zstd gzip
+
+	# The app is HTTPS-only by design: the microphone needs a secure context,
+	# so there is no reason to ever let a client settle for plaintext.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	log {
+		output stderr
+		format console
+	}
+}

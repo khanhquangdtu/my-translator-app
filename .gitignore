@@ -11,3 +11,8 @@ next-env.d.ts
 
 # local dev https certs
 /certificates
+
+# project-local AWS profile — real keys live here
+/.aws/*
+!/.aws/config
+!/.aws/credentials.example
