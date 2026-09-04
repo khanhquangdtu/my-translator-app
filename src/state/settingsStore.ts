@@ -46,6 +46,8 @@ export type Prefs = {
 
   speakerDetection: boolean;
   showSpeakerChip: boolean;
+  /** auto-identify speaker names from conversation context using AI */
+  autoIdentifySpeakers: boolean;
 
   keepAwake: boolean;
   backgroundListening: boolean;
@@ -104,6 +106,7 @@ const DEFAULTS: Prefs = {
 
   speakerDetection: true,
   showSpeakerChip: true,
+  autoIdentifySpeakers: true,
 
   keepAwake: true,
   backgroundListening: true,

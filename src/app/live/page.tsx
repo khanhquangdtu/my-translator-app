@@ -144,6 +144,9 @@ export default function LiveScreen() {
   const speakerOrder = useLive((s) => s.speakerOrder);
   const turnCounts = useLive((s) => s.turnCounts);
   const renameSpeaker = useLive((s) => s.renameSpeaker);
+  const suggestedNames = useLive((s) => s.suggestedNames);
+  const acceptSuggestion = useLive((s) => s.acceptSuggestion);
+  const dismissSuggestion = useLive((s) => s.dismissSuggestion);
 
   const session = useSession();
 
@@ -715,6 +718,17 @@ export default function LiveScreen() {
           onAction={() => router.push('/onboarding/1')}
         />
       ) : null}
+
+      {Object.entries(suggestedNames).map(([id, suggestion]) => (
+        <Banner
+          key={id}
+          tone="info"
+          text={`${speakerDisplayName(id, speakerNames, speakerOrder)} might be "${suggestion.name}"`}
+          action="Accept"
+          onAction={() => acceptSuggestion(id)}
+          onDismiss={() => dismissSuggestion(id)}
+        />
+      ))}
 
       {items.length === 0 ? (
         <div className={styles.center}>

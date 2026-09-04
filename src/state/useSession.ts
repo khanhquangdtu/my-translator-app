@@ -17,12 +17,13 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { useMicCapture } from '@/lib/audio/capture';
-import { hasSonioxKey } from '@/lib/config/capabilities';
+import { hasOpenAIKey, hasSonioxKey } from '@/lib/config/capabilities';
 import { MOCK_ENABLED, MockEngine } from '@/lib/engine/mock';
 import { SonioxEngine } from '@/lib/engine/soniox';
 import type { TranslationEngine } from '@/lib/engine/types';
 import { activateKeepAwake, deactivateKeepAwake } from '@/lib/platform';
 import { deleteSession, saveSession } from '@/lib/sessions/store';
+import { startIdentification, stopIdentification } from '@/lib/speakers/identify';
 import { useLive } from '@/state/liveStore';
 import { resolveLanguage, useSettings } from '@/state/settingsStore';
 
@@ -127,6 +128,10 @@ export function useSession() {
     tickRef.current = setInterval(() => useLive.getState().tick(), 1000);
     autosaveRef.current = setInterval(() => void persist(), AUTOSAVE_MS);
 
+    if (prefs.autoIdentifySpeakers && hasOpenAIKey()) {
+      startIdentification();
+    }
+
     return 'ok';
   }, [buildEngine, mic, persist]);
 
@@ -136,6 +141,7 @@ export function useSession() {
     mic.stop();
     engineRef.current?.disconnect();
     engineRef.current = null;
+    stopIdentification();
 
     if (tickRef.current) clearInterval(tickRef.current);
     if (autosaveRef.current) clearInterval(autosaveRef.current);
@@ -184,6 +190,7 @@ export function useSession() {
     mic.stop();
     engineRef.current?.disconnect();
     engineRef.current = null;
+    stopIdentification();
 
     if (tickRef.current) clearInterval(tickRef.current);
     if (autosaveRef.current) clearInterval(autosaveRef.current);

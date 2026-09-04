@@ -115,6 +115,17 @@ export default function TranslationSettings() {
           disabled={speakerOrder.length === 0}
         />
         <Row
+          label="Auto-identify names"
+          sub="Uses AI to detect names from conversation"
+          right={
+            <Toggle
+              value={prefs.autoIdentifySpeakers}
+              onChange={(v) => setPref('autoIdentifySpeakers', v)}
+              accessibilityLabel="Auto-identify speaker names"
+            />
+          }
+        />
+        <Row
           label="Show speaker chip"
           sub="Colour rail always shown"
           right={

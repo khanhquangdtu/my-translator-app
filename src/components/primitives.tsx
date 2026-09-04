@@ -432,12 +432,14 @@ export function Banner({
   tone,
   action,
   onAction,
+  onDismiss,
 }: {
   glyph?: string;
   text: string;
   tone: keyof typeof BANNER_TONE;
   action?: string;
   onAction?: () => void;
+  onDismiss?: () => void;
 }) {
   return (
     <div className={cx(styles.banner, BANNER_TONE[tone])} role="status">
@@ -446,6 +448,11 @@ export function Banner({
       {action ? (
         <button type="button" onClick={onAction} className={styles.bannerAction}>
           {action}
+        </button>
+      ) : null}
+      {onDismiss ? (
+        <button type="button" onClick={onDismiss} className={styles.bannerAction}>
+          ✕
         </button>
       ) : null}
     </div>

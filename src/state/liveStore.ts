@@ -98,6 +98,10 @@ type LiveState = {
   speakerOrder: string[];
   speakerNames: Record<string, string>;
   turnCounts: Record<string, number>;
+  /** names suggested by AI but not yet confirmed */
+  suggestedNames: Record<string, { name: string; confidence: string; evidence: string }>;
+  /** speaker ids the user explicitly renamed — AI will never override these */
+  manuallyNamed: Set<string>;
 
   // ── session record ──
   sessionId: string | null;
@@ -139,6 +143,14 @@ type LiveState = {
   tick: () => void;
   renameSpeaker: (id: string, name: string) => void;
   mergeSpeakers: (from: string, into: string) => void;
+  suggestSpeakerName: (
+    id: string,
+    name: string,
+    confidence: string,
+    evidence: string
+  ) => void;
+  acceptSuggestion: (id: string) => void;
+  dismissSuggestion: (id: string) => void;
   reset: () => void;
   toSessionData: (engine: string, sourceLang: string, targetLang: string) => SessionData | null;
 };
@@ -172,6 +184,8 @@ export const useLive = create<LiveState>()((set, get) => ({
   speakerOrder: [],
   speakerNames: {},
   turnCounts: {},
+  suggestedNames: {},
+  manuallyNamed: new Set(),
 
   sessionId: null,
   sessionCreatedAt: null,
@@ -393,7 +407,15 @@ export const useLive = create<LiveState>()((set, get) => ({
   renameSpeaker: (id, name) => {
     // Retroactive by construction: the name is resolved at render time from
     // this map, so every past turn picks it up at once.
-    set({ speakerNames: { ...get().speakerNames, [id]: name.trim() } });
+    const manuallyNamed = new Set(get().manuallyNamed);
+    manuallyNamed.add(id);
+    const suggestedNames = { ...get().suggestedNames };
+    delete suggestedNames[id];
+    set({
+      speakerNames: { ...get().speakerNames, [id]: name.trim() },
+      manuallyNamed,
+      suggestedNames,
+    });
   },
 
   mergeSpeakers: (from, into) => {
@@ -435,6 +457,49 @@ export const useLive = create<LiveState>()((set, get) => ({
     });
   },
 
+  suggestSpeakerName: (id, name, confidence, evidence) => {
+    if (get().manuallyNamed.has(id)) return;
+    if (confidence === 'high') {
+      // Auto-apply high-confidence names (direct self-introductions)
+      set({
+        speakerNames: { ...get().speakerNames, [id]: name },
+        // Remove from suggestions if it was there
+        suggestedNames: (() => {
+          const s = { ...get().suggestedNames };
+          delete s[id];
+          return s;
+        })(),
+      });
+    } else if (confidence === 'medium') {
+      set({
+        suggestedNames: {
+          ...get().suggestedNames,
+          [id]: { name, confidence, evidence },
+        },
+      });
+    }
+    // 'low' is silently discarded
+  },
+
+  acceptSuggestion: (id) => {
+    const suggestion = get().suggestedNames[id];
+    if (!suggestion) return;
+    const suggestedNames = { ...get().suggestedNames };
+    delete suggestedNames[id];
+    set({
+      speakerNames: { ...get().speakerNames, [id]: suggestion.name },
+      suggestedNames,
+    });
+  },
+
+  dismissSuggestion: (id) => {
+    const suggestedNames = { ...get().suggestedNames };
+    delete suggestedNames[id];
+    const manuallyNamed = new Set(get().manuallyNamed);
+    manuallyNamed.add(id);
+    set({ suggestedNames, manuallyNamed });
+  },
+
   reset: () =>
     set({
       running: false,
@@ -452,6 +517,8 @@ export const useLive = create<LiveState>()((set, get) => ({
       speakerOrder: [],
       speakerNames: {},
       turnCounts: {},
+      suggestedNames: {},
+      manuallyNamed: new Set(),
       sessionId: null,
       sessionCreatedAt: null,
       sessionTitle: '',
