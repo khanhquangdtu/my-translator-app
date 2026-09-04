@@ -124,6 +124,18 @@ export default function SettingsRoot() {
           label="Privacy"
           sub="No account · no telemetry · keys never leave the server"
         />
+        {/*
+          Visible to everyone, useful to one person. The row is not a leak: the
+          page behind it is password-gated, and hiding the entrance instead
+          would just mean the operator has to remember a URL.
+        */}
+        <Row
+          glyph="🔑"
+          label="Admin"
+          sub="Provider keys and usage"
+          chevron
+          onPress={() => router.push('/admin')}
+        />
       </ScreenBody>
     </Screen>
   );

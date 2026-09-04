@@ -13,6 +13,8 @@ import 'server-only';
 
 import { OPENAI_SUMMARY_MODEL } from '@/lib/summary/model';
 
+import { readOpenAIUsage, recordUsage } from './usage';
+
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
 const REQUEST_TIMEOUT_MS = 15000;
@@ -160,6 +162,20 @@ export async function identifySpeakers(
   }
 
   const payload = await response.json();
+
+  // Bookkeeping for the admin dashboard. OpenAI publishes no usage endpoint a
+  // project key may call, so what the response already tells us is the only
+  // record there will be. Fire-and-forget by design -- see `recordUsage`.
+  const spent = readOpenAIUsage(payload);
+  if (spent) {
+    recordUsage({
+      provider: 'openai',
+      model: OPENAI_SUMMARY_MODEL,
+      inputTokens: spent.input,
+      outputTokens: spent.output,
+      route: 'identify-speakers',
+    });
+  }
   const content: string | undefined = payload?.choices?.[0]?.message?.content;
   if (!content) throw new Error('OpenAI returned empty content');
 

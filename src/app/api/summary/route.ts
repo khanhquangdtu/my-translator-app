@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server';
 
 import { MissingKeyError } from '@/lib/summary/types';
 import { summarizeWithOpenAI } from '@/server/openai';
+import { providerKey } from '@/server/secrets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,7 +28,7 @@ type Body = {
 };
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = await providerKey('openai');
   if (!apiKey) {
     return NextResponse.json(
       { error: 'This deployment has no summary key configured.', missingKey: true },

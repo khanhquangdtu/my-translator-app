@@ -19,6 +19,8 @@ import 'server-only';
 import { OPENAI_SUMMARY_MODEL } from '@/lib/summary/model';
 import { MissingKeyError, type Summary } from '@/lib/summary/types';
 
+import { readOpenAIUsage, recordUsage } from './usage';
+
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
 const REQUEST_TIMEOUT_MS = 90000;
@@ -126,6 +128,20 @@ export async function summarizeWithOpenAI(
   }
 
   const payload = await response.json();
+
+  // Bookkeeping for the admin dashboard. OpenAI publishes no usage endpoint a
+  // project key may call, so what the response already tells us is the only
+  // record there will be. Fire-and-forget by design -- see `recordUsage`.
+  const spent = readOpenAIUsage(payload);
+  if (spent) {
+    recordUsage({
+      provider: 'openai',
+      model: OPENAI_SUMMARY_MODEL,
+      inputTokens: spent.input,
+      outputTokens: spent.output,
+      route: 'summary',
+    });
+  }
   const content: string | undefined = payload?.choices?.[0]?.message?.content;
   if (!content) throw new Error('OpenAI returned empty content');
 

@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 
 import { identifySpeakers, type IdentifyTurn } from '@/server/identify';
+import { providerKey } from '@/server/secrets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,7 @@ type Body = {
 };
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = await providerKey('openai');
   if (!apiKey) {
     return NextResponse.json(
       { error: 'No OpenAI key configured.', missingKey: true },

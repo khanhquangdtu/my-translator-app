@@ -6,12 +6,15 @@
  */
 import { NextResponse } from 'next/server';
 
+import { hasProviderKey } from '@/server/secrets';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export function GET() {
-  return NextResponse.json({
-    soniox: !!process.env.SONIOX_API_KEY,
-    openai: !!process.env.OPENAI_API_KEY,
-  });
+export async function GET() {
+  // Async now, because a key set from the admin page lives in the database
+  // rather than the environment. Without this the browser would keep believing
+  // a freshly configured deployment had no keys until the next restart.
+  const [soniox, openai] = await Promise.all([hasProviderKey('soniox'), hasProviderKey('openai')]);
+  return NextResponse.json({ soniox, openai });
 }

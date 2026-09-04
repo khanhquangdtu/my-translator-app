@@ -14,6 +14,8 @@
  */
 import { NextResponse } from 'next/server';
 
+import { providerKey } from '@/server/secrets';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +37,7 @@ const EXPIRES_IN_SECONDS = 60;
 const MAX_SESSION_DURATION_SECONDS = 240;
 
 export async function POST() {
-  const apiKey = process.env.SONIOX_API_KEY;
+  const apiKey = await providerKey('soniox');
   if (!apiKey) {
     return NextResponse.json(
       { error: 'This deployment has no Soniox key configured.' },
