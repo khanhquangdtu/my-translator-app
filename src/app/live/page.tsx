@@ -600,10 +600,10 @@ export default function LiveScreen() {
           state: (i < 2 ? 'final' : 'old') as 'live' | 'final' | 'old',
         }));
 
-      if (provisional?.text && provisional.language === lang && provisionalDst) {
-        // Only show the in-flight line once a translation preview exists,
-        // matching the finalised-turn rule of showing only `dst`.
-        const liveText = provisionalDst;
+      if (provisional?.text && provisional.language === lang) {
+        // Show the source text live while speaking; once the translation
+        // preview arrives, switch to it so the reader sees the target language.
+        const liveText = provisionalDst || provisional.text;
         // Append to the newest block if same speaker is still talking
         const head = lines[0];
         const headSpeaker = blocks.length > 0 ? blocks[blocks.length - 1].speaker : null;
