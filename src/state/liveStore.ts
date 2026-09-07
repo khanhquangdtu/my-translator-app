@@ -30,6 +30,12 @@ import {
 /** Soniox is billed at roughly $0.12 per hour of audio. */
 const COST_PER_SECOND = 0.12 / 3600;
 
+/**
+ * Quantisation for the mic level. Finer than any meter can render, coarse
+ * enough that a quiet room stops writing the store at all.
+ */
+const LEVEL_STEPS = 64;
+
 /** A turn waiting this long for its translation is never getting one. */
 const STALE_PENDING_MS = 10000;
 /** More than this many unmatched turns means pairing has drifted; flush oldest. */
@@ -80,6 +86,16 @@ type LiveState = {
    */
   turns: Turn[];
   provisional: Provisional | null;
+  /**
+   * The translation of the utterance still being spoken, as Soniox revises it.
+   *
+   * Deliberately *not* a field on `Provisional`, and deliberately not a turn:
+   * it never enters the FIFO queue that `addTranslation` fills, because a value
+   * that is still being rewritten would take the place meant for a finalised
+   * one and scramble every pairing after it. It is overwritten wholesale and
+   * cleared the moment the real translation arrives.
+   */
+  provisionalDst: string | null;
 
   /** 0..1 mic loudness for the meter */
   level: number;
@@ -133,6 +149,7 @@ type LiveState = {
   addOriginal: (text: string, speaker: string | null, language: string | null) => void;
   addTranslation: (text: string) => void;
   setProvisional: (text: string, speaker: string | null, language: string | null) => void;
+  setProvisionalDst: (text: string) => void;
   setStatus: (status: EngineStatus) => void;
   setError: (message: string | null, attempt?: number) => void;
   setLevel: (level: number) => void;
@@ -173,6 +190,7 @@ export const useLive = create<LiveState>()((set, get) => ({
 
   turns: [],
   provisional: null,
+  provisionalDst: null,
   level: 0,
   lastLoudAtSec: 0,
   lastInteractionSec: 0,
@@ -274,15 +292,34 @@ export const useLive = create<LiveState>()((set, get) => ({
       }
     }
 
-    // Retire turns that will never be paired, oldest first, before adding.
-    let turns = state.turns.map((t) =>
-      t.pending && now - t.createdAt > STALE_PENDING_MS ? { ...t, pending: false } : t
-    );
-    const pendingIds = turns.filter((t) => t.pending).map((t) => t.id);
-    if (pendingIds.length > MAX_PENDING) {
-      const drop = new Set(pendingIds.slice(0, pendingIds.length - MAX_PENDING));
-      turns = turns.map((t) => (drop.has(t.id) ? { ...t, pending: false } : t));
+    /*
+     * Retire turns that will never be paired, oldest first, before adding.
+     *
+     * One pass instead of three, and — the part that matters — no copy at all
+     * in the common case. This runs on every finalised utterance over a window
+     * of up to 1000 turns, and the overwhelmingly usual outcome is that nothing
+     * needs retiring: at most `MAX_PENDING` turns are ever pending, and they go
+     * stale only when a translation genuinely never arrives. Rebuilding the
+     * array to discover that was pure waste.
+     */
+    const liveIds: number[] = [];
+    let stale = false;
+    for (const t of state.turns) {
+      if (!t.pending) continue;
+      if (now - t.createdAt > STALE_PENDING_MS) stale = true;
+      else liveIds.push(t.id);
     }
+    const overflow = liveIds.length - MAX_PENDING;
+    const drop = overflow > 0 ? new Set(liveIds.slice(0, overflow)) : null;
+
+    const turns =
+      stale || drop
+        ? state.turns.map((t) =>
+            t.pending && (drop?.has(t.id) || now - t.createdAt > STALE_PENDING_MS)
+              ? { ...t, pending: false }
+              : t
+          )
+        : state.turns;
 
     const turn: Turn = {
       id: nextTurnId++,
@@ -367,6 +404,18 @@ export const useLive = create<LiveState>()((set, get) => ({
     set({ provisional: { text, speaker, speakerIndex, language } });
   },
 
+  setProvisionalDst: (text) => {
+    // Short-circuit the clear, which arrives on every finalising message and
+    // would otherwise write the store — and wake every subscriber — to set null
+    // to null.
+    if (!text) {
+      if (get().provisionalDst !== null) set({ provisionalDst: null });
+      return;
+    }
+    if (get().provisionalDst === text) return;
+    set({ provisionalDst: text });
+  },
+
   setStatus: (status) => {
     // A successful (re)connection clears the degraded banner.
     if (status === 'connected') set({ status, error: null, reconnectAttempt: 0 });
@@ -377,17 +426,33 @@ export const useLive = create<LiveState>()((set, get) => ({
     set({ error: message, ...(attempt !== undefined ? { reconnectAttempt: attempt } : {}) }),
 
   setLevel: (level) => {
-    // Throttled to whole seconds: setLevel runs on every hardware buffer, and
-    // bumping a field the screen subscribes to that often would re-render the
-    // transcript ~15×/s.
+    /*
+     * Called from inside the audio callback, once per captured block — about
+     * 30×/s. Two separate throttles, for two separate reasons.
+     *
+     * `lastLoudAtSec` is throttled to whole seconds because that is all the
+     * table-mode timer needs. That much was always true; the comment here used
+     * to claim it covered `level` as well, which the code did not do — the
+     * `else` branch wrote the store unconditionally. Nothing subscribes to
+     * `level` through a selector (the meter reads it via `subscribe` into a
+     * ref), so it never re-rendered the transcript, but every write still ran
+     * every selector on the Live screen — around 500 calls a second, all
+     * discarded, on the same task that then resamples and sends the audio.
+     *
+     * So `level` is quantised too. A meter 200 px tall cannot show more than
+     * this many steps, and silence — where consecutive blocks are identical —
+     * now writes nothing at all.
+     */
     const state = get();
+    const quantised = Math.round(level * LEVEL_STEPS) / LEVEL_STEPS;
     const nowSec = state.startedAt
       ? state.accumulatedSec + Math.floor((Date.now() - state.startedAt) / 1000)
       : state.accumulatedSec;
+
     if (level >= QUIET_THRESHOLD && nowSec !== state.lastLoudAtSec) {
-      set({ level, lastLoudAtSec: nowSec });
-    } else {
-      set({ level });
+      set({ level: quantised, lastLoudAtSec: nowSec });
+    } else if (quantised !== state.level) {
+      set({ level: quantised });
     }
   },
 
@@ -508,6 +573,7 @@ export const useLive = create<LiveState>()((set, get) => ({
       reconnectAttempt: 0,
       turns: [],
       provisional: null,
+      provisionalDst: null,
       level: 0,
       lastLoudAtSec: 0,
       lastInteractionSec: 0,

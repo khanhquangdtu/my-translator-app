@@ -89,7 +89,18 @@ const DEFAULTS: Prefs = {
   languageA: AUTO,
   languageB: 'en',
   languageHintsStrict: false,
-  endpointDelay: 3000,
+  /*
+   * The bottom of the range the Translation screen offers, not the middle.
+   *
+   * This is how long Soniox waits out a pause before calling a turn finished,
+   * and it used to be the single largest number in the whole latency budget —
+   * larger than capture, network and render put together. It was set high
+   * because a finalised turn was the *only* thing that could show a
+   * translation, so cutting an utterance short lost the reader their sentence.
+   * The live translation preview removed that constraint: a short delay now
+   * costs an occasional split block, not three seconds of blank screen.
+   */
+  endpointDelay: 1500,
   customContext: null,
 
   fontSize: DEFAULT_TRANSCRIPT_SIZE,

@@ -32,8 +32,39 @@ const RECONNECT_DELAY_MS = 2000;
 /** Soniox sessions are time-boxed; roll over well before the limit. */
 const SESSION_DURATION_MS = 3 * 60 * 1000;
 const CONTEXT_HISTORY_CHARS = 500;
+/**
+ * How far ahead of the rollover to start it.
+ *
+ * The reset has to fetch a token before it can open the new socket, and that
+ * fetch sits between two live sockets: the old one is still carrying audio, so
+ * nothing is lost, but its remaining budget is being spent waiting. Starting
+ * the whole make-before-break early spends the fetch out of slack instead.
+ * Well inside the token's own 60 s validity, and inside the 240 s ceiling the
+ * mint route sets, so neither expires underneath it.
+ */
+const TOKEN_PREFETCH_LEAD_MS = 5000;
 /** the socket times out during long silences without this */
 const KEEPALIVE_INTERVAL_MS = 15000;
+
+/**
+ * Fallback when the caller passes no `endpointDelay`. The UI always does, so
+ * this is the floor for programmatic callers and tests rather than the value
+ * most sessions run at — `settingsStore` owns that.
+ */
+const DEFAULT_ENDPOINT_DELAY_MS = 1500;
+
+/**
+ * How much audio to hold while the socket is coming up.
+ *
+ * The mic starts producing the moment `mic.start()` resolves, which is well
+ * before the token fetch and the WSS handshake have finished, and every one of
+ * those blocks used to be dropped on the floor — so the first words after Start
+ * were not late, they were *gone*. Same on a reconnect, where the backoff is
+ * 2/4/6 s. Buffering them costs 5 s × 32 kB/s ≈ 160 kB, and the cap matters:
+ * without it a long outage would grow this without bound.
+ */
+const PRECONNECT_BUFFER_MS = 5000;
+const PRECONNECT_BUFFER_BYTES = (16000 * 2 * PRECONNECT_BUFFER_MS) / 1000;
 
 type SonioxToken = {
   text: string;
@@ -63,6 +94,9 @@ export class SonioxEngine implements TranslationEngine {
   private sessionTimer: ReturnType<typeof setTimeout> | null = null;
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private recentTranslations: string[] = [];
+  /** audio captured before the socket was ready; flushed on open, oldest first */
+  private pendingAudio: ArrayBuffer[] = [];
+  private pendingAudioBytes = 0;
   /**
    * Bumped by every connect/disconnect. A token fetch that resolves after the
    * user has already stopped belongs to a dead generation and must not open a
@@ -76,6 +110,7 @@ export class SonioxEngine implements TranslationEngine {
   onOriginal?: (text: string, speaker: string | null, language: string | null) => void;
   onTranslation?: (text: string) => void;
   onProvisional?: (text: string, speaker: string | null, language: string | null) => void;
+  onProvisionalTranslation?: (text: string) => void;
   onConfidence?: (avgConfidence: number) => void;
   onError?: (message: string) => void;
 
@@ -84,6 +119,8 @@ export class SonioxEngine implements TranslationEngine {
     this.intentionalDisconnect = false;
     this.reconnectAttempts = 0;
     this.recentTranslations = [];
+    this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
     this.generation++;
 
     void this.doConnect(config);
@@ -140,6 +177,10 @@ export class SonioxEngine implements TranslationEngine {
       }
 
       this.ws = next;
+      // Ahead of whatever the mic delivers next, and synchronously, so the
+      // buffered audio cannot be overtaken by a live block. Empty during a
+      // seamless reset: the old socket was still accepting audio throughout.
+      this.flushPendingAudio(next);
       this.isConnected = true;
       this.reconnectAttempts = 0;
       this.setStatus('connected');
@@ -206,7 +247,9 @@ export class SonioxEngine implements TranslationEngine {
       sample_rate: 16000,
       num_channels: 1,
       enable_endpoint_detection: true,
-      max_endpoint_delay_ms: config.endpointDelay || 3000,
+      // `??`, not `||`: the Display setting's floor is 1500 so 0 is not
+      // reachable today, but `||` would silently promote a future 0 to 3000.
+      max_endpoint_delay_ms: config.endpointDelay ?? DEFAULT_ENDPOINT_DELAY_MS,
       enable_speaker_diarization: true,
       enable_language_identification: true,
     };
@@ -239,6 +282,31 @@ export class SonioxEngine implements TranslationEngine {
   sendAudio(pcm: ArrayBuffer) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(pcm);
+      return;
+    }
+    // Not connected yet (or reconnecting): hold it rather than lose it. Once
+    // the cap is reached the *oldest* audio goes, so what survives is the
+    // speech nearest to the moment the socket comes up.
+    if (this.intentionalDisconnect) return;
+    this.pendingAudio.push(pcm);
+    this.pendingAudioBytes += pcm.byteLength;
+    while (this.pendingAudioBytes > PRECONNECT_BUFFER_BYTES && this.pendingAudio.length > 1) {
+      this.pendingAudioBytes -= this.pendingAudio.shift()!.byteLength;
+    }
+  }
+
+  /**
+   * Replay buffered audio into a freshly opened socket, ahead of anything the
+   * mic delivers next, so the recording stays in order.
+   */
+  private flushPendingAudio(socket: WebSocket) {
+    if (!this.pendingAudio.length) return;
+    const queued = this.pendingAudio;
+    this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
+    for (const chunk of queued) {
+      if (socket.readyState !== WebSocket.OPEN) break;
+      socket.send(chunk);
     }
   }
 
@@ -247,6 +315,10 @@ export class SonioxEngine implements TranslationEngine {
     this.generation++;
     this.stopSessionTimer();
     this.stopKeepalive();
+    // Nothing will ever send these now, and holding them would leak the buffer
+    // across into the next session.
+    this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
 
     if (this.ws) {
       try {
@@ -275,6 +347,7 @@ export class SonioxEngine implements TranslationEngine {
     let originalText = '';
     let translationText = '';
     let provisionalText = '';
+    let provisionalTranslation = '';
     let hasEnd = false;
     let speaker: string | null = null;
     let language: string | null = null;
@@ -303,7 +376,11 @@ export class SonioxEngine implements TranslationEngine {
       }
 
       if (token.translation_status === 'translation') {
+        // Non-final translation is a preview, not a result: it goes out on its
+        // own channel and never reaches `onTranslation`, whose FIFO pairing
+        // would be scrambled by a value that is still being rewritten.
         if (token.is_final) translationText += token.text;
+        else provisionalTranslation += token.text;
       } else {
         // 'original', 'none' (third-language speech in two-way mode), or absent
         if (token.is_final) originalText += token.text;
@@ -328,13 +405,29 @@ export class SonioxEngine implements TranslationEngine {
       // the in-flight line resolved into a final one — clear it
       this.onProvisional?.('', null, null);
     }
+
+    // Same lifecycle, one channel over: show the translation as it is being
+    // built, then drop it the instant the finalised text takes its place. This
+    // is what removes `max_endpoint_delay_ms` from the path to the text the
+    // reader actually looks at — before it, the translation could not appear
+    // until Soniox had decided the utterance was over.
+    if (provisionalTranslation.trim()) {
+      this.onProvisionalTranslation?.(provisionalTranslation);
+    } else if (translationText.trim() || hasEnd) {
+      this.onProvisionalTranslation?.('');
+    }
   }
 
   // ─── Session lifecycle ───────────────────────────────────────────────
 
   private startSessionTimer() {
     this.stopSessionTimer();
-    this.sessionTimer = setTimeout(() => this.seamlessReset(), SESSION_DURATION_MS);
+    // Fire early by the prefetch lead so the token is already in hand when the
+    // rollover actually runs — see `seamlessReset`.
+    this.sessionTimer = setTimeout(
+      () => this.seamlessReset(),
+      SESSION_DURATION_MS - TOKEN_PREFETCH_LEAD_MS
+    );
   }
 
   private stopSessionTimer() {

@@ -48,6 +48,15 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /*
+   * The transcript's contents cannot affect layout outside it — it is a fixed
+   * flex child with its own scroll area — but the browser has no way to know
+   * that, so every appended line invalidated layout up the tree. Saying so
+   * scopes the reflow to this subtree, which matters here because the reflow
+   * happens several times a second on the same thread that resamples and sends
+   * the microphone audio.
+   */
+  contain: layout style;
 }
 
 /*

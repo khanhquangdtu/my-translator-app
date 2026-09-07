@@ -59,9 +59,19 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 USER nextjs
 EXPOSE 3000
 
-# /api/config is the cheapest honest liveness probe: it touches no provider and
-# no database, and answering it at all means the server is up.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
+# /api/config is the cheapest honest liveness probe: answering it at all means
+# the server is up.
+#
+# It is no longer quite free, though — `hasProviderKey` reads the admin settings
+# document, so on a cold cache this probe reaches Mongo. Two numbers follow from
+# that. The timeout is 8s rather than 3s because it must not be equal to the
+# driver's own `serverSelectionTimeoutMS` (3s, see server/mongo.ts): with both
+# at three seconds, a database blip on a cold cache made "is the container
+# healthy" a coin flip between the two racing deadlines. And the interval is no
+# longer 30s, which used to be exactly the secrets cache TTL — so the probe
+# reliably landed on a just-expired entry and paid to refill it. The TTL is now
+# five minutes, so this samples well inside a warm cache.
+HEALTHCHECK --interval=30s --timeout=8s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "server.js"]

@@ -85,6 +85,29 @@ function notify() {
 
 // ─── The ported API surface ────────────────────────────────────────────
 
+/**
+ * Suppresses the upload half of autosave while a session is being recorded.
+ *
+ * Autosave runs every 15 s, and each run used to `POST /api/sessions` with the
+ * *entire* transcript — so a long meeting uploaded a full copy of itself four
+ * times a minute, growing every time, competing with the audio WebSocket for
+ * bandwidth and with the capture callback for the main thread it serialises on.
+ *
+ * Nothing is risked by holding it back. The IndexedDB write still happens on
+ * schedule, so a crash or a dead battery loses no more than before, and the
+ * outbox entry is keyed by session id — fifteen deferred saves collapse into
+ * the one row that the flush after Stop drains. Deletes are never deferred:
+ * `deleteSession` calls `flush` directly, because the Stop dialog promises a
+ * discarded session is gone from the server too.
+ */
+let syncDeferred = false;
+
+export function deferSync(deferred: boolean): void {
+  if (syncDeferred === deferred) return;
+  syncDeferred = deferred;
+  if (!deferred) void flush();
+}
+
 export async function saveSession(data: SessionData): Promise<void> {
   const updatedAt = new Date().toISOString();
   const database = await db();
@@ -95,7 +118,7 @@ export async function saveSession(data: SessionData): Promise<void> {
     tx.done,
   ]);
   notify();
-  void flush();
+  if (!syncDeferred) void flush();
 }
 
 export async function readSession(id: string): Promise<SessionData | null> {

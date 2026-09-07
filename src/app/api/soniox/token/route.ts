@@ -36,6 +36,9 @@ const EXPIRES_IN_SECONDS = 60;
  */
 const MAX_SESSION_DURATION_SECONDS = 240;
 
+/** How long to wait for Soniox to mint the key before giving the user an error. */
+const AUTH_TIMEOUT_MS = 5000;
+
 export async function POST() {
   const apiKey = await providerKey('soniox');
   if (!apiKey) {
@@ -44,6 +47,14 @@ export async function POST() {
       { status: 503 }
     );
   }
+
+  // This was the one outbound call on the live path with no deadline, while
+  // every other call in the app has one. Tapping Start is a foreground action
+  // with a spinner attached: a Soniox auth endpoint that has stopped answering
+  // should surface as an error the user can retry in seconds, not hang until
+  // the runtime's own default gives up.
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), AUTH_TIMEOUT_MS);
 
   let response: Response;
   try {
@@ -55,12 +66,20 @@ export async function POST() {
         expires_in_seconds: EXPIRES_IN_SECONDS,
         max_session_duration_seconds: MAX_SESSION_DURATION_SECONDS,
       }),
+      signal: abort.signal,
     });
   } catch (err) {
+    const timedOut = (err as Error)?.name === 'AbortError';
     return NextResponse.json(
-      { error: `Could not reach Soniox: ${(err as Error)?.message ?? String(err)}` },
+      {
+        error: timedOut
+          ? `Soniox did not answer within ${AUTH_TIMEOUT_MS / 1000} seconds.`
+          : `Could not reach Soniox: ${(err as Error)?.message ?? String(err)}`,
+      },
       { status: 502 }
     );
+  } finally {
+    clearTimeout(timer);
   }
 
   if (!response.ok) {

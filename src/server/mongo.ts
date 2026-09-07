@@ -80,6 +80,21 @@ function client(): Promise<MongoClient> {
      */
     serverSelectionTimeoutMS: 3000,
     connectTimeoutMS: 3000,
+    /*
+     * `minPoolSize` defaults to 0, which lets the pool drain to nothing
+     * whenever the app goes quiet — and then the next request, which is very
+     * often someone tapping Start, pays for a fresh TCP handshake before it can
+     * do anything. Two idle connections is a rounding error in memory and
+     * removes that cost from the path entirely.
+     */
+    minPoolSize: 2,
+    maxPoolSize: 20,
+    /*
+     * Server *selection* is already bounded above, but a read that hangs after
+     * selection succeeded had no deadline at all. Same reasoning as the 3 s:
+     * this app would rather fail quickly and retry than wait.
+     */
+    socketTimeoutMS: 10000,
   }).connect();
   return globalForMongo._mongoClient;
 }

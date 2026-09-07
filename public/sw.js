@@ -9,9 +9,15 @@
  * `/api/*` is never cached, under any strategy. A cached session list would
  * show sessions that have been deleted, and a cached POST response would look
  * like a summary that was never generated — both worse than an honest error.
+ *
+ * Two strategies for what is left, split on whether the URL identifies the
+ * content. Content-hashed build output is cache-first; everything else is
+ * stale-while-revalidate, so a redeployed asset at an unchanged URL is picked
+ * up rather than pinned forever. Bumping VERSION drops both caches on the next
+ * activate, which is the blunt instrument for when that is not enough.
  */
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = `shell-${VERSION}`;
 const ASSET_CACHE = `assets-${VERSION}`;
 
@@ -79,19 +85,57 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Everything else — build assets, fonts, the worklet, icons. These are
-  // content-hashed or effectively static, so cache first is safe and fast.
+  // `/_next/static/*` is content-hashed: a changed file gets a changed URL, so
+  // a hit can never be stale and cache-first is both safe and the fastest
+  // answer available.
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ??
+          fetch(request).then((response) => {
+            if (response.ok && response.type === 'basic') {
+              const copy = response.clone();
+              void caches.open(ASSET_CACHE).then((cache) => cache.put(request, copy));
+            }
+            return response;
+          })
+      )
+    );
+    return;
+  }
+
+  /*
+   * Everything else in `public/` — the worklet, the manifest, the icons —
+   * carries no hash, so its URL is the same forever. Cache-first therefore had
+   * no way back: `/pcm-worklet.js` was precached on install and served from
+   * that copy for the life of the installation, which meant a fix shipped to
+   * the audio capture path would never reach anyone who had already opened the
+   * app. That is the microphone, on the latency path this whole worker sits
+   * beside.
+   *
+   * Stale-while-revalidate keeps the instant answer and adds a way back: serve
+   * the cached copy, fetch the real one alongside it, and have the next load
+   * pick up whatever changed. One load behind, rather than permanently behind.
+   */
   event.respondWith(
-    caches.match(request).then(
-      (cached) =>
-        cached ??
-        fetch(request).then((response) => {
+    caches.match(request).then((cached) => {
+      const network = fetch(request)
+        .then((response) => {
           if (response.ok && response.type === 'basic') {
             const copy = response.clone();
             void caches.open(ASSET_CACHE).then((cache) => cache.put(request, copy));
           }
           return response;
         })
-    )
+        .catch((err) => {
+          // Offline with nothing cached is a genuine failure; offline with a
+          // cached copy already returned is not, and must not reject.
+          if (cached) return cached;
+          throw err;
+        });
+
+      return cached ?? network;
+    })
   );
 });

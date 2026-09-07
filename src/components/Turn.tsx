@@ -31,6 +31,8 @@
  */
 'use client';
 
+import { memo } from 'react';
+
 import { color, labelFor, railFor } from '@/theme/tokens';
 
 import { cx } from './primitives';
@@ -50,7 +52,7 @@ export type TurnLine = {
   onPress?: () => void;
 };
 
-export function TurnView({
+function TurnViewImpl({
   speakerName,
   speakerIndex,
   lines,
@@ -147,6 +149,49 @@ export function TurnView({
     </div>
   );
 }
+
+/**
+ * Blocks re-render only when their own text changes.
+ *
+ * The live transcript rebuilds its whole item list on every provisional token —
+ * five to eight times a second while anyone is speaking — and each rebuild
+ * hands every block a freshly allocated `lines` array. Referential equality
+ * therefore fails for all of them, and ~100 blocks' worth of spans reconcile
+ * for the sake of the one line that actually changed.
+ *
+ * So the comparison is by value. It costs a handful of field reads per line and
+ * saves reconciling the subtree, which is a trade that only gets better as the
+ * transcript grows. `onPress` is compared by presence rather than identity: it
+ * closes over a stable `toggleSource` and the turn's own id, so a new closure
+ * with the same defined-ness cannot mean different behaviour, and demanding
+ * identity would defeat the whole memo.
+ */
+export const TurnView = memo(TurnViewImpl, (prev, next) => {
+  if (
+    prev.speakerName !== next.speakerName ||
+    prev.speakerIndex !== next.speakerIndex ||
+    prev.fontSize !== next.fontSize ||
+    prev.timestamp !== next.timestamp ||
+    prev.lines.length !== next.lines.length
+  ) {
+    return false;
+  }
+  for (let i = 0; i < prev.lines.length; i++) {
+    const a = prev.lines[i];
+    const b = next.lines[i];
+    if (
+      a.key !== b.key ||
+      a.src !== b.src ||
+      a.dst !== b.dst ||
+      a.state !== b.state ||
+      a.showSource !== b.showSource ||
+      !a.onPress !== !b.onPress
+    ) {
+      return false;
+    }
+  }
+  return true;
+});
 
 /** "NEWEST" label with a hairline rule filling the rest of the width. */
 export function NewestDivider() {

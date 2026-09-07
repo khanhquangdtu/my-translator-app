@@ -55,6 +55,16 @@ export type EngineCallbacks = {
   onTranslation?: (text: string) => void;
   /** in-flight recognition; replaces (never appends to) the previous value */
   onProvisional?: (text: string, speaker: string | null, language: string | null) => void;
+  /**
+   * In-flight *translation*, replacing (never appending to) the previous value.
+   *
+   * Separate from `onTranslation` on purpose. That one feeds the FIFO pairing
+   * in `liveStore`, which matches each finalised translation to the oldest turn
+   * still waiting for one; a provisional value must never enter that queue or
+   * the pairing scrambles. This is a preview line and nothing else — it is
+   * overwritten wholesale and cleared the moment the real translation lands.
+   */
+  onProvisionalTranslation?: (text: string) => void;
   onConfidence?: (avgConfidence: number) => void;
   onError?: (message: string) => void;
 };

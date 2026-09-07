@@ -8,11 +8,27 @@
  * mobile and desktop builds use, so all three agree on what 16 kHz means.
  *
  * A render quantum is 128 frames — posting each one would be ~375 messages a
- * second. Blocks are accumulated to 2048 frames (~43 ms at 48 kHz) first, which
- * is still far finer than the 200 ms the engine batches to.
+ * second. Blocks are accumulated first, to a size chosen so the block is always
+ * the same number of *milliseconds*.
+ *
+ * That last part is the non-obvious bit. This used to be a flat 2048 frames,
+ * described as "~43 ms at 48 kHz" — true, but frames are not time. `capture.ts`
+ * asks the AudioContext for 16 kHz, and on the platforms that honour the
+ * request (Chrome on Android, often) 2048 frames is 128 ms, three times the
+ * latency the constant was chosen for. The optimisation meant to save a
+ * resample was quietly paying for it in delay. Deriving from `sampleRate`
+ * removes the coupling: ~32 ms at any rate the browser hands us.
  */
 
-const BLOCK_FRAMES = 2048;
+/** Target block duration. Small enough to be well under the engine's batch. */
+const BLOCK_MS = 32;
+
+/**
+ * Rounded to a whole number of 128-frame render quanta — `process` can only
+ * flush on a quantum boundary, so a non-multiple would just round itself up
+ * and make the real duration differ from the intended one.
+ */
+const BLOCK_FRAMES = Math.max(128, Math.round((sampleRate * BLOCK_MS) / 1000 / 128) * 128);
 
 class PcmCaptureProcessor extends AudioWorkletProcessor {
   constructor() {

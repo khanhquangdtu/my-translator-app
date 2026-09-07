@@ -165,3 +165,62 @@ describe('memory window', () => {
     expect(segments.every((s) => s.speaker === 'spk-1')).toBe(true);
   });
 });
+
+/**
+ * The live translation preview must stay outside the pairing queue.
+ *
+ * `addTranslation` fills the oldest turn still waiting for one, FIFO, with no
+ * correlation id to check it against — so anything that reaches it out of turn
+ * silently shifts every later line onto the wrong source. `setProvisionalDst`
+ * carries text that Soniox is still rewriting, which makes it exactly the kind
+ * of value that must never get in. These assert the seam holds, because the
+ * failure would be invisible: no throw, no gap, just a transcript where each
+ * translation belongs to the sentence before it.
+ */
+describe('provisional translation', () => {
+  beforeEach(session);
+
+  it('never creates a turn of its own', () => {
+    const live = useLive.getState();
+    live.setProvisionalDst('partially transl');
+    live.setProvisionalDst('partially translated');
+
+    expect(useLive.getState().turns).toHaveLength(0);
+    expect(useLive.getState().provisionalDst).toBe('partially translated');
+    expect(saved()).toHaveLength(0);
+  });
+
+  it('leaves FIFO pairing untouched however it interleaves', () => {
+    const live = useLive.getState();
+
+    // Two sources land before either translation — the case the FIFO queue
+    // exists for — with preview text arriving throughout.
+    live.setProvisionalDst('one par');
+    live.addOriginal('first source', 'spk-1', 'en');
+    live.setProvisionalDst('one partially');
+    live.addOriginal('second source', 'spk-1', 'en');
+    live.setProvisionalDst('two par');
+    live.addTranslation('first translation');
+    live.setProvisionalDst('two partially');
+    live.addTranslation('second translation');
+
+    const turns = useLive.getState().turns;
+    expect(turns.map((t) => [t.src, t.dst])).toEqual([
+      ['first source', 'first translation'],
+      ['second source', 'second translation'],
+    ]);
+  });
+
+  it('clears without disturbing what is already paired', () => {
+    const live = useLive.getState();
+    live.addOriginal('source', 'spk-1', 'en');
+    live.addTranslation('translation');
+    live.setProvisionalDst('next sentence in progress');
+    live.setProvisionalDst('');
+
+    expect(useLive.getState().provisionalDst).toBeNull();
+    const turns = useLive.getState().turns;
+    expect(turns).toHaveLength(1);
+    expect(turns[0].dst).toBe('translation');
+  });
+});

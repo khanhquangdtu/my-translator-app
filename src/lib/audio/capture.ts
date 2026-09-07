@@ -24,8 +24,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { QUIET_THRESHOLD, rmsLevel } from './level';
 import { Resampler, TARGET_SAMPLE_RATE } from './resample';
 
-/** 16000 samples/s × 0.2 s = 3200 samples = 6400 bytes per batch. */
-const BATCH_SAMPLES = TARGET_SAMPLE_RATE / 5;
+/**
+ * 16000 samples/s × 0.1 s = 1600 samples = 3200 bytes per batch.
+ *
+ * This is a hard floor on how late any given word can leave the browser, so it
+ * is worth keeping small. Halving it from 200 ms costs 10 WebSocket frames a
+ * second instead of 5 — noise next to the ~32 kB/s the stream already carries.
+ */
+const BATCH_SAMPLES = TARGET_SAMPLE_RATE / 10;
 
 const WORKLET_URL = '/pcm-worklet.js';
 
@@ -144,7 +150,15 @@ export function useMicCapture({ onPcm, onLevel }: MicCaptureOptions) {
     try {
       // Asking for 16 kHz here is worth doing — some platforms honour it and
       // the resampler then short-circuits — but never worth trusting.
-      const context = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
+      //
+      // `latencyHint` is spelled out rather than left to default. It already
+      // defaults to 'interactive', so this changes nothing today; it is here so
+      // that a future edit has to argue with a stated intent instead of
+      // silently inheriting a different one.
+      const context = new AudioContext({
+        sampleRate: TARGET_SAMPLE_RATE,
+        latencyHint: 'interactive',
+      });
       contextRef.current = context;
       // Safari can hand back a suspended context even inside a user gesture.
       if (context.state === 'suspended') await context.resume();

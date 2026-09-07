@@ -21,7 +21,17 @@ type Body = {
 };
 
 export async function POST(request: Request) {
-  const apiKey = await providerKey('openai');
+  // Started together: the key lookup and reading the request body are
+  // independent, and awaiting them in sequence put a possible database round
+  // trip in front of work that could have been happening anyway. `allSettled`
+  // because each has its own failure to report — a missing key and a malformed
+  // body are different answers, and neither should be reported as the other.
+  const [keyResult, bodyResult] = await Promise.allSettled([
+    providerKey('openai'),
+    request.json() as Promise<Body>,
+  ]);
+
+  const apiKey = keyResult.status === 'fulfilled' ? keyResult.value : null;
   if (!apiKey) {
     return NextResponse.json(
       { error: 'No OpenAI key configured.', missingKey: true },
@@ -29,12 +39,10 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: Body;
-  try {
-    body = (await request.json()) as Body;
-  } catch {
+  if (bodyResult.status !== 'fulfilled') {
     return NextResponse.json({ error: 'Malformed request.' }, { status: 400 });
   }
+  const body: Body = bodyResult.value;
 
   const turns = Array.isArray(body.turns) ? (body.turns as IdentifyTurn[]) : [];
   const knownNames =

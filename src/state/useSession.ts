@@ -22,7 +22,7 @@ import { MOCK_ENABLED, MockEngine } from '@/lib/engine/mock';
 import { SonioxEngine } from '@/lib/engine/soniox';
 import type { TranslationEngine } from '@/lib/engine/types';
 import { activateKeepAwake, deactivateKeepAwake } from '@/lib/platform';
-import { deleteSession, saveSession } from '@/lib/sessions/store';
+import { deferSync, deleteSession, saveSession } from '@/lib/sessions/store';
 import { startIdentification, stopIdentification } from '@/lib/speakers/identify';
 import { useLive } from '@/state/liveStore';
 import { resolveLanguage, useSettings } from '@/state/settingsStore';
@@ -81,6 +81,7 @@ export function useSession() {
     engine.onTranslation = (text) => useLive.getState().addTranslation(text);
     engine.onProvisional = (text, speaker, language) =>
       useLive.getState().setProvisional(text, speaker, language);
+    engine.onProvisionalTranslation = (text) => useLive.getState().setProvisionalDst(text);
     engine.onError = (message) => {
       const attempt = engine instanceof SonioxEngine ? engine.attempt : 0;
       useLive.getState().setError(message, attempt);
@@ -99,6 +100,9 @@ export function useSession() {
     live.setError(null);
     live.setRunning(true);
 
+    // Autosave keeps writing to IndexedDB; only the upload waits for Stop.
+    deferSync(true);
+
     const engine = buildEngine();
     engineRef.current = engine;
     // No apiKey: the browser holds none. SonioxEngine mints a short-lived one
@@ -116,6 +120,7 @@ export function useSession() {
 
     const micError = await mic.start();
     if (micError) {
+      deferSync(false);
       engine.disconnect();
       engineRef.current = null;
       useLive.getState().setRunning(false);
@@ -153,10 +158,14 @@ export function useSession() {
     const live = useLive.getState();
     live.setRunning(false);
     live.setProvisional('', null, null);
+    live.setProvisionalDst('');
     live.setLevel(0);
     live.endChunk();
     live.setStatus('disconnected');
 
+    // Released before the final write, so that write's own flush drains the
+    // whole session in one upload.
+    deferSync(false);
     await persist(true);
   }, [mic, persist]);
 
@@ -200,7 +209,11 @@ export function useSession() {
 
     useLive.getState().reset();
     lastSavedRevision.current = -1;
+    // Ordered: the delete supersedes the deferred put (same outbox key) and
+    // flushes on its own, so releasing afterwards cannot upload a transcript
+    // this call exists to destroy.
     if (id) await deleteSession(id);
+    deferSync(false);
   }, [mic]);
 
   const retry = useCallback(async () => {
@@ -214,6 +227,9 @@ export function useSession() {
       if (autosaveRef.current) clearInterval(autosaveRef.current);
       engineRef.current?.disconnect();
       deactivateKeepAwake();
+      // Navigating away mid-session must not leave uploads suppressed for the
+      // rest of the page's life.
+      deferSync(false);
     };
   }, []);
 

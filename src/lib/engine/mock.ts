@@ -46,6 +46,7 @@ export class MockEngine implements TranslationEngine {
   onOriginal?: (text: string, speaker: string | null, language: string | null) => void;
   onTranslation?: (text: string) => void;
   onProvisional?: (text: string, speaker: string | null, language: string | null) => void;
+  onProvisionalTranslation?: (text: string) => void;
   onConfidence?: (avgConfidence: number) => void;
   onError?: (message: string) => void;
 
@@ -82,6 +83,27 @@ export class MockEngine implements TranslationEngine {
       );
     });
 
+    /*
+     * And the translation behind it, lagging and growing in its own right.
+     *
+     * Soniox revises a running translation while the speaker is still talking,
+     * which is what lets the reader follow along instead of waiting for the
+     * endpoint delay — so the mock has to show that too, or the one path you
+     * cannot walk without a real key is the one that matters most. It starts
+     * later and moves in chunks, because a translation is not a transliteration
+     * and does not arrive a character at a time.
+     */
+    const dstChars = line.dst.split('');
+    const dstStart = PROVISIONAL_STEP_MS + words.length * 12;
+    dstChars.forEach((_, i) => {
+      if (i % 3 !== 0 && i !== dstChars.length - 1) return;
+      this.timers.push(
+        setTimeout(() => {
+          this.onProvisionalTranslation?.(line.dst.slice(0, i + 1));
+        }, dstStart + i * 30)
+      );
+    });
+
     const finaliseAt = PROVISIONAL_STEP_MS + words.length * 40 + 300;
     this.timers.push(
       setTimeout(() => {
@@ -90,7 +112,13 @@ export class MockEngine implements TranslationEngine {
         this.onConfidence?.(0.93);
       }, finaliseAt)
     );
-    this.timers.push(setTimeout(() => this.onTranslation?.(line.dst), finaliseAt + 500));
+    this.timers.push(
+      setTimeout(() => {
+        // The preview gives way to the real thing, exactly as it does live.
+        this.onProvisionalTranslation?.('');
+        this.onTranslation?.(line.dst);
+      }, finaliseAt + 500)
+    );
 
     this.timers.push(setTimeout(() => this.scheduleTurn(), TURN_INTERVAL_MS));
   }

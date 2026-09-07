@@ -41,7 +41,7 @@ import { PromptDialog } from '@/components/PromptDialog';
 import { SaveDialog } from '@/components/SaveDialog';
 import { ActionBar, Screen } from '@/components/Screen';
 import { Sheet, SheetGroup, SheetItem, SheetNote, SheetSeparator } from '@/components/Sheet';
-import { MAX_PANELS, SpeakerPanels, type Panel } from '@/components/SpeakerPanels';
+import { TwoWayPanels, type TwoWayPanelData } from '@/components/TwoWayPanels';
 import { NewestDivider, TurnView, type TurnLine, type TurnState } from '@/components/Turn';
 import { shortCode } from '@/data/languages';
 import type { Segment } from '@/lib/sessions/format';
@@ -74,6 +74,8 @@ const DIM_TIMEOUT_SEC = 60;
  * fresh block rather than extending the last one indefinitely.
  */
 const RUN_GAP_MS = 30_000;
+/** Shorter gap for two-way panels — tighter blocks keep columns readable. */
+const TWO_WAY_GAP_MS = 5_000;
 
 /** Slack for "the reader is still pinned to the newest line". */
 const FOLLOW_SLACK_PX = 24;
@@ -118,6 +120,8 @@ type ListItem = {
   speakerIndex: number;
   /** the in-flight line, when it belongs to this run */
   provisional: string | null;
+  /** its translation, as Soniox revises it — the primary text when present */
+  provisionalDst: string | null;
   turns: { turn: Turn; state: TurnState }[];
 };
 
@@ -127,6 +131,7 @@ export default function LiveScreen() {
 
   const prefs = useSettings((s) => s.prefs);
   const setPref = useSettings((s) => s.set);
+  const merge = useSettings((s) => s.merge);
   const summaryAvailable = hasOpenAIKey();
 
   const running = useLive((s) => s.running);
@@ -135,6 +140,7 @@ export default function LiveScreen() {
   const droppedSegments = useLive((s) => s.droppedSegments);
   const sessionId = useLive((s) => s.sessionId);
   const provisional = useLive((s) => s.provisional);
+  const provisionalDst = useLive((s) => s.provisionalDst);
   const error = useLive((s) => s.error);
   const reconnectAttempt = useLive((s) => s.reconnectAttempt);
   const reconnectMax = useLive((s) => s.reconnectMax);
@@ -150,6 +156,9 @@ export default function LiveScreen() {
 
   const session = useSession();
 
+  const [panelRotation, setPanelRotation] = useState(0);
+  const [panelSwap, setPanelSwap] = useState([false, false]);
+  const [panelsReversed, setPanelsReversed] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [speakersOpen, setSpeakersOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -176,6 +185,8 @@ export default function LiveScreen() {
   const listRef = useRef<HTMLDivElement>(null);
   /** Scroll height at the last commit, for the prepend compensation below. */
   const lastHeight = useRef(0);
+  /** whether the previous run of the scroll effect was in following mode */
+  const wasFollowing = useRef(true);
   /** "Following" = pinned to the newest line. */
   const [following, setFollowing] = useState(true);
 
@@ -274,6 +285,7 @@ export default function LiveScreen() {
           speaker: turn.speaker,
           speakerIndex: turn.speakerIndex,
           provisional: null,
+          provisionalDst: null,
           turns: [{ turn, state }],
         };
         list.push(run);
@@ -287,18 +299,39 @@ export default function LiveScreen() {
       const head = list[0];
       if (head && provisional.speaker !== null && head.speaker === provisional.speaker) {
         head.provisional = provisional.text;
+        head.provisionalDst = provisionalDst;
       } else {
         list.unshift({
           speaker: provisional.speaker,
           speakerIndex: provisional.speakerIndex,
           provisional: provisional.text,
+          provisionalDst,
+          turns: [],
+        });
+      }
+    } else if (provisionalDst) {
+      // The source finalised while its translation is still being revised —
+      // Soniox stops sending provisional source the moment it commits the
+      // utterance, but keeps rewriting the translation for a moment after. The
+      // in-flight line has to survive that window, or the live translation
+      // blinks out and reappears as a finished turn, which reads worse than
+      // never having shown it.
+      const head = list[0];
+      if (head) {
+        head.provisionalDst = provisionalDst;
+      } else {
+        list.unshift({
+          speaker: null,
+          speakerIndex: 0,
+          provisional: null,
+          provisionalDst,
           turns: [],
         });
       }
     }
 
     return list;
-  }, [turns, provisional, history, fromHistory, fromMemory, speakerOrder]);
+  }, [turns, provisional, provisionalDst, history, fromHistory, fromMemory, speakerOrder]);
 
   /**
    * Follow the newest line while the reader is at the top; hold their place in
@@ -315,13 +348,33 @@ export default function LiveScreen() {
     const list = listRef.current;
     if (!list) return;
 
+    // Reading `scrollHeight` forces a synchronous layout of the whole
+    // transcript, and this effect runs at token rate because `items` is a new
+    // array on every provisional update. When the reader is at the top there is
+    // nothing to correct — the scroll position is pinned — so the two reads
+    // that used to happen anyway were pure cost, paid several times a second on
+    // the thread the audio pipeline shares. `lastHeight` is only consulted
+    // while not following, so leaving it stale here is safe; the first frame
+    // after the reader scrolls away re-establishes it.
     if (following) {
       list.scrollTop = 0;
-    } else {
-      const grew = list.scrollHeight - lastHeight.current;
-      if (grew > 0) list.scrollTop += grew;
+      wasFollowing.current = true;
+      return;
     }
-    lastHeight.current = list.scrollHeight;
+
+    const height = list.scrollHeight;
+    // First frame after the reader scrolled away: `lastHeight` was left behind
+    // while following, so the difference against it is meaningless and would
+    // yank the view. Re-establish the baseline and correct nothing this time.
+    if (wasFollowing.current) {
+      wasFollowing.current = false;
+      lastHeight.current = height;
+      return;
+    }
+
+    const grew = height - lastHeight.current;
+    if (grew > 0) list.scrollTop += grew;
+    lastHeight.current = height;
   }, [items, following]);
 
   const onScroll = useCallback(() => {
@@ -348,6 +401,9 @@ export default function LiveScreen() {
     // watching `turns` — a start is exactly the event that means "this is a new
     // transcript".
     setRevealedIds(new Set<number>());
+    setPanelRotation(0);
+    setPanelSwap([false, false]);
+    setPanelsReversed(false);
     const result = await session.start();
     if (result === 'not-configured') {
       // Nothing the user can do about this one — the deployment has no key, so
@@ -436,70 +492,175 @@ export default function LiveScreen() {
         ? 'warn'
         : 'live';
 
-  // Panels need width, so the mode is only actually in effect once there are
-  // few enough speakers to give each a readable column.
-  const tooManySpeakers = speakerOrder.length > MAX_PANELS;
-  const panelsActive = prefs.viewMode === 'panels' && !tooManySpeakers;
+  // Two-way is a UI layout, not an engine mode — each panel is one-way.
+  const twoWay = prefs.viewMode === 'panels';
+  const resolvedA = resolveLanguage(prefs.languageA);
+  const resolvedB = resolveLanguage(prefs.languageB);
 
-  const toggleLayout = useCallback(() => {
+  const toggleTwoWay = useCallback(() => {
     setOverflowOpen(false);
-    setPref('viewMode', prefs.viewMode === 'panels' ? 'stream' : 'panels');
-  }, [prefs.viewMode, setPref]);
+    if (twoWay) {
+      setPref('viewMode', 'stream');
+    } else {
+      merge({
+        viewMode: 'panels',
+        languageA: prefs.sourceLanguage,
+        languageB: resolveLanguage(prefs.targetLanguage),
+      });
+    }
+  }, [twoWay, prefs.sourceLanguage, prefs.targetLanguage, setPref, merge]);
 
-  // Choosing panels asks for landscape and holds the session there until the
-  // layout is switched back — a column layout in portrait is unreadable.
-  // Best-effort on the web: the lock needs fullscreen and only exists on
-  // mobile, so the layout still follows the window either way.
+  // Two-way forces landscape so each panel gets enough width.
   useEffect(() => {
-    if (panelsActive && running) void lockLandscape();
+    if (twoWay && running) void lockLandscape();
     else void unlockOrientation();
-    return () => {
-      void unlockOrientation();
-    };
-  }, [panelsActive, running]);
+    return () => { void unlockOrientation(); };
+  }, [twoWay, running]);
 
-  const panels = useMemo<Panel[]>(() => {
-    if (!panelsActive) return [];
-    return speakerOrder.slice(0, MAX_PANELS).map((speakerId, index) => {
-      const own = turns.filter((t) => t.speaker === speakerId);
-      const lines = own
+  const twoWayPanelData = useMemo<[TwoWayPanelData, TwoWayPanelData] | null>(() => {
+    if (!twoWay) return null;
+
+    // Position of each turn in `turns`, built once per recompute.
+    //
+    // The interruption check below needs to know where two turns sit relative
+    // to each other in the full stream. It used to answer that with a
+    // `findIndex` that allocated a string and ran `.split()` on every
+    // comparison, plus an `indexOf` — for every turn, over the whole 1000-turn
+    // array, twice (once per panel), at token rate. One map turns that from
+    // quadratic into a lookup, on the same thread the audio pipeline runs on.
+    const indexOfTurn = new Map<number, number>();
+    for (let i = 0; i < turns.length; i++) indexOfTurn.set(turns[i].id, i);
+
+    const buildLines = (lang: string) => {
+      const own = turns.filter((t) => t.language === lang);
+
+      // Group consecutive same-speaker turns within RUN_GAP_MS into one block.
+      // A different speaker interrupting (in any language) also breaks the block,
+      // so we check against the full turn list, not just this language's subset.
+      type Block = {
+        id: string;
+        firstTurnId: number;
+        texts: string[];
+        lastCreatedAt: number;
+        speaker: string | null;
+      };
+      const blocks: Block[] = [];
+
+      for (const t of own) {
+        const text = t.dst || t.src;
+        if (!text) continue;
+        const prev = blocks[blocks.length - 1];
+
+        // Does this turn continue the previous block?
+        // Break if: no previous, different speaker, too long since last turn,
+        // or another speaker spoke in between (check the full turns array).
+        let interrupted = false;
+        if (prev) {
+          // Look for any turn from a *different* speaker that landed between
+          // the previous block's last turn and this one.
+          const prevIdx = indexOfTurn.get(prev.firstTurnId) ?? -1;
+          const curIdx = indexOfTurn.get(t.id) ?? -1;
+          if (prevIdx >= 0 && curIdx > prevIdx + 1) {
+            for (let k = prevIdx + 1; k < curIdx; k++) {
+              if (turns[k].speaker !== t.speaker) { interrupted = true; break; }
+            }
+          }
+        }
+
+        const continues =
+          prev &&
+          prev.speaker === t.speaker &&
+          t.createdAt - prev.lastCreatedAt <= TWO_WAY_GAP_MS &&
+          !interrupted;
+
+        if (continues && prev) {
+          prev.texts.push(text);
+          prev.lastCreatedAt = t.createdAt;
+          // Keep the first turn's id as block key
+        } else {
+          blocks.push({
+            id: `t${t.id}`,
+            firstTurnId: t.id,
+            texts: [text],
+            lastCreatedAt: t.createdAt,
+            speaker: t.speaker,
+          });
+        }
+      }
+
+      const lines = blocks
         .slice(-prefs.maxLinesKept)
         .reverse()
-        .map((t, i) => ({
-          id: `t${t.id}`,
-          text: t.dst || t.src,
+        .map((b, i) => ({
+          id: b.id,
+          text: b.texts.join(' '),
           state: (i < 2 ? 'final' : 'old') as 'live' | 'final' | 'old',
         }));
-      if (provisional?.text && provisional.speaker === speakerId) {
-        lines.unshift({ id: 'provisional', text: provisional.text, state: 'live' });
+
+      if (provisional?.text && provisional.language === lang) {
+        // Finalised blocks above show `t.dst || t.src`, so the in-flight line
+        // follows the same rule: the running translation when there is one,
+        // the source until the first translated token lands.
+        const liveText = provisionalDst || provisional.text;
+        // Append to the newest block if same speaker is still talking
+        const head = lines[0];
+        const headSpeaker = blocks.length > 0 ? blocks[blocks.length - 1].speaker : null;
+        if (head && provisional.speaker === headSpeaker) {
+          head.text = liveText + ' ' + head.text;
+          head.state = 'live';
+        } else {
+          lines.unshift({ id: 'provisional', text: liveText, state: 'live' });
+        }
       }
+
+      return lines;
+    };
+
+    // Each panel can independently swap its direction.
+    const make = (index: number, defaultSrc: string, defaultTgt: string, srcKey: 'a' | 'b', tgtKey: 'a' | 'b') => {
+      const swapped = panelSwap[index];
+      const src = swapped ? defaultTgt : defaultSrc;
+      const tgt = swapped ? defaultSrc : defaultTgt;
+      const pickSrc = swapped ? tgtKey : srcKey;
+      const pickTgt = swapped ? srcKey : tgtKey;
       return {
-        speakerId,
-        name: speakerDisplayName(speakerId, speakerNames, speakerOrder) ?? `Speaker ${index + 1}`,
-        speakerIndex: index,
-        turnCount: turnCounts[speakerId] ?? own.length,
-        lines,
+        sourceLabel: shortCode(src),
+        targetLabel: shortCode(tgt),
+        onPickSource: () => router.push(`/language-picker?target=${pickSrc}`),
+        onPickTarget: () => router.push(`/language-picker?target=${pickTgt}`),
+        onSwap: () => setPanelSwap((s) => { const n = [...s]; n[index] = !n[index]; return n; }),
+        lines: buildLines(src),
       };
-    });
+    };
+
+    return [
+      make(0, resolvedA, resolvedB, 'a', 'b'),
+      make(1, resolvedB, resolvedA, 'b', 'a'),
+    ] as [TwoWayPanelData, TwoWayPanelData];
   }, [
-    panelsActive,
-    speakerOrder,
+    twoWay,
     turns,
     provisional,
-    speakerNames,
-    turnCounts,
+    provisionalDst,
+    resolvedA,
+    resolvedB,
     prefs.maxLinesKept,
+    router,
+    panelSwap,
   ]);
 
   // Source keeps 'AUTO' — that is a real mode (Soniox detects it). The target
   // never is: 'auto' means "follow the device", so show what it actually
   // resolves to rather than a second, meaningless AUTO.
   const langPair = `${shortCode(prefs.sourceLanguage)} → ${shortCode(resolveLanguage(prefs.targetLanguage))}`;
+  const displayPair = twoWay
+    ? `${shortCode(resolvedA)} ↔ ${shortCode(resolvedB)}`
+    : langPair;
   const saveSubtitle = [
     `${Math.max(1, Math.round(elapsedSec / 60))} minutes`,
     `${turns.length} turns`,
     speakerOrder.length > 0 ? `${speakerOrder.length} speakers` : null,
-    langPair,
+    displayPair,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -520,12 +681,19 @@ export default function LiveScreen() {
   const renderItem = (item: ListItem, key: string) => {
     const lines: TurnLine[] = [];
 
-    if (item.provisional) {
+    if (item.provisional || item.provisionalDst) {
       // No id, no pairing yet, nothing to reveal — inert until it finalises.
+      //
+      // `dst` is what TurnView renders as the primary text. Once Soniox is
+      // sending a running translation that goes here and the source becomes the
+      // annotation, which is the whole point: the reader watches the language
+      // they can read, live, instead of waiting for the endpoint delay. Before
+      // the first translated token arrives there is nothing to show but the
+      // source, so it keeps the primary slot until then.
       lines.push({
         key: 'provisional',
-        src: '',
-        dst: item.provisional,
+        src: item.provisionalDst ? (item.provisional ?? '') : '',
+        dst: item.provisionalDst ?? item.provisional ?? '',
         state: 'live',
         showSource: false,
       });
@@ -586,6 +754,37 @@ export default function LiveScreen() {
     </div>
   );
 
+  // ── Two-way fullscreen ─────────────────────────────────────────────
+  // Own early return so nothing else (strip, action bar) renders beneath
+  // the rotated container. Stop + Rotate controls live inside the panels.
+  if (twoWay && running && twoWayPanelData) {
+    const displayedPanels: [TwoWayPanelData, TwoWayPanelData] = panelsReversed
+      ? [twoWayPanelData[1], twoWayPanelData[0]]
+      : twoWayPanelData;
+    return (
+      <Screen>
+        <TwoWayPanels
+          panels={displayedPanels}
+          fontSize={fontSize}
+          rotation={panelRotation}
+          onRotate={() => setPanelRotation((r) => (r + 1) % 4)}
+          onStop={onStop}
+          onFontUp={() => adjustFont(4)}
+          onFontDown={() => adjustFont(-4)}
+          onSwapPanels={() => setPanelsReversed((r) => !r)}
+        />
+        {/* Dialogs must stay mounted so Save appears after Stop. */}
+        <SaveDialog
+          visible={askingToSave}
+          subtitle={saveSubtitle}
+          summaryEnabled={summaryAvailable}
+          onSave={onSave}
+          onDiscard={onDiscard}
+        />
+      </Screen>
+    );
+  }
+
   // ── Table mode (landscape) ─────────────────────────────────────────
   if (landscape && running) {
     // A pointer listener on the container, not a button wrapper: the transcript
@@ -601,27 +800,15 @@ export default function LiveScreen() {
             <div className={styles.landTop}>
               <StatusDot tone={dotTone} pulse={running} />
               <span className={styles.landTopText}>
-                {langPair}
+                {displayPair}
                 {speakerCount > 0 ? ` · ${speakerCount} speakers` : ''}
               </span>
               <span className={cx(styles.landTopText, styles.tabular)}>
                 {formatElapsed(elapsedSec)} · ${estimateCost(elapsedSec).toFixed(2)}
               </span>
-              <button
-                type="button"
-                onClick={toggleLayout}
-                aria-label="Change layout"
-                className={styles.landSeg}>
-                <span className={cx(styles.landSegItem, !panelsActive && styles.landSegOn)}>
-                  ≡ Stream
-                </span>
-                <span className={cx(styles.landSegItem, panelsActive && styles.landSegOn)}>
-                  ▥ Panels
-                </span>
-              </button>
             </div>
           ) : null}
-          {panelsActive ? <SpeakerPanels panels={panels} fontSize={fontSize} /> : transcript}
+          {transcript}
         </div>
       </Screen>
     );
@@ -651,14 +838,6 @@ export default function LiveScreen() {
             onPress={() => router.push('/settings')}
           />
         )}
-        {running ? (
-          <AppBarIcon
-            glyph="▥"
-            accessibilityLabel="Change layout"
-            active={panelsActive}
-            onPress={toggleLayout}
-          />
-        ) : null}
         <AppBarIcon
           glyph="☰"
           accessibilityLabel="More options"
@@ -669,22 +848,31 @@ export default function LiveScreen() {
 
       {!running ? (
         <div className={styles.pills}>
-          <Pill
-            caret
-            onPress={() => router.push('/language-picker?target=source')}
-            accessibilityLabel={`Language ${langPair}`}>
-            {langPair}
-          </Pill>
-          <Pill caret accessibilityLabel="Audio source: microphone">
-            🎙 Mic
-          </Pill>
-          <Pill caret onPress={() => setSpeakersOpen(true)} accessibilityLabel="Speakers">
-            👥 Speakers {prefs.speakerDetection ? 'on' : 'off'}
-          </Pill>
-          {/* Picking panels here opens the session straight into it — and
-              straight into landscape, from the first turn. */}
-          <Pill caret onPress={toggleLayout} accessibilityLabel="Display layout">
-            {prefs.viewMode === 'panels' ? '▥ Speaker panels' : '≡ Stream view'}
+          {twoWay ? (
+            <>
+              <Pill
+                caret
+                onPress={() => router.push('/language-picker?target=a')}
+                accessibilityLabel="Language A">
+                {shortCode(resolvedA)}
+              </Pill>
+              <Pill
+                caret
+                onPress={() => router.push('/language-picker?target=b')}
+                accessibilityLabel="Language B">
+                {shortCode(resolvedB)}
+              </Pill>
+            </>
+          ) : (
+            <Pill
+              caret
+              onPress={() => router.push('/language-picker?target=source')}
+              accessibilityLabel={`Language ${langPair}`}>
+              {langPair}
+            </Pill>
+          )}
+          <Pill caret onPress={toggleTwoWay} accessibilityLabel="Translation mode">
+            {twoWay ? '↔ Two way' : '→ One way'}
           </Pill>
         </div>
       ) : null}
@@ -698,14 +886,6 @@ export default function LiveScreen() {
               ? `Connection dropped — retrying (${reconnectAttempt}/${reconnectMax})`
               : error
           }
-        />
-      ) : null}
-
-      {running && prefs.viewMode === 'panels' && tooManySpeakers ? (
-        <Banner
-          tone="warnSoft"
-          glyph="▥"
-          text={`${speakerOrder.length} speakers — too many for the column layout. Showing the stream instead.`}
         />
       ) : null}
 
@@ -759,7 +939,7 @@ export default function LiveScreen() {
         <LevelMeter />
         <span className={styles.stripText}>
           {running
-            ? `${langPair}${speakerCount > 0 ? ` · ${speakerCount} speakers` : ''}`
+            ? `${displayPair}${speakerCount > 0 ? ` · ${speakerCount} speakers` : ''}`
             : 'Mic level — quiet'}
         </span>
       </div>
@@ -816,10 +996,10 @@ export default function LiveScreen() {
         <SheetSeparator />
         <SheetGroup>This session</SheetGroup>
         <SheetItem
-          glyph="▥"
-          label="Layout"
-          meta={panelsActive ? 'Speaker panels' : 'Stream'}
-          onPress={toggleLayout}
+          glyph="↔"
+          label="Mode"
+          meta={twoWay ? 'Two way' : 'One way'}
+          onPress={toggleTwoWay}
         />
         <SheetItem
           glyph="A"

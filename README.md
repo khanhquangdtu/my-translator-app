@@ -164,6 +164,13 @@ and its defensive parsing, and the session API against a real MongoDB
 (`mongodb-memory-server` downloads a mongod the first time; the suite skips
 itself if it cannot).
 
+`npm run caption` also prints a latency breakdown — audio out, first token
+back, first *partial* translation, first *final* translation, caption on screen,
+all relative to the first audio frame. Partial versus final is the line to watch:
+the first is the live preview, the second is what `endpointDelay` gates. Compare
+runs rather than absolute numbers; the WAV loops, so speech starts at a
+different offset each time.
+
 `npm run caption` is the end-to-end proof that speech becomes captions: it feeds
 Chrome a WAV as its microphone (`--use-file-for-fake-audio-capture`) and waits
 for a turn to appear, printing the Soniox WebSocket traffic as it goes. When
@@ -214,9 +221,19 @@ Mostly inherited, because the code is.
 - **Turn pairing.** Source and translation arrive as two uncorrelated streams and
   are matched FIFO in `state/liveStore.ts`. Changing that ordering silently
   scrambles transcripts.
+- **The live translation preview is not a turn.** Soniox revises a translation
+  while the sentence is still being spoken, and `provisionalDst` shows that as
+  it arrives — which is what keeps `max_endpoint_delay_ms` off the path to the
+  text the reader is actually looking at. It must never reach `addTranslation`:
+  that queue is the FIFO above, and a value still being rewritten would take the
+  slot meant for a finalised one and misalign every line after it. `setLevel`
+  quantises for the same family of reason — it runs inside the audio callback,
+  so anything it does is paid for in latency.
 - **3-minute session rollover** in `engine/soniox.ts` is make-before-break, and
-  now also has to fetch a fresh token mid-flight. Any edit there must be tested
-  with a session longer than three minutes.
+  now also has to fetch a fresh token mid-flight — started `TOKEN_PREFETCH_LEAD_MS`
+  early so that fetch comes out of slack rather than out of the old session's
+  remaining budget. Any edit there must be tested with a session longer than
+  three minutes.
 - **Summary requests.** The gpt-5 family rejects `max_tokens` (use
   `max_completion_tokens`) and refuses a custom `temperature`. A model can
   satisfy a JSON schema and still return the wrong types, so keep the defensive

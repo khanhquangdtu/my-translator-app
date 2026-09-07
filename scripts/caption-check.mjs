@@ -83,6 +83,31 @@ try {
   let framesOut = 0;
   let bytesOut = 0;
   const notable = [];
+
+  /*
+   * Latency marks, all relative to the first audio frame that left the browser.
+   *
+   * The pass/fail check below polls the DOM once a second, which is fine for
+   * "did a caption appear at all" and useless for the thing actually being
+   * optimised — the interesting numbers here are all under a second. These
+   * marks come from the CDP WebSocket events and a MutationObserver instead, so
+   * they can distinguish the four stages that used to be one opaque wait:
+   * audio out, first recognised word back, first *translated* word back, and
+   * the translation on screen.
+   *
+   * `firstTranslationFinal` is the one to watch across an endpoint-delay
+   * change: it is gated by Soniox deciding the utterance ended, where
+   * `firstTranslationPartial` is not.
+   */
+  const mark = {
+    firstAudioSent: null,
+    firstTokenAny: null,
+    firstOriginalPartial: null,
+    firstTranslationPartial: null,
+    firstTranslationFinal: null,
+  };
+  const at = () => Date.now();
+  const since = (t) => (t === null || mark.firstAudioSent === null ? null : t - mark.firstAudioSent);
   cdp.on('Network.webSocketCreated', ({ requestId, url }) => {
     if (url.includes('soniox')) {
       sonioxSockets.add(requestId);
@@ -93,6 +118,9 @@ try {
     if (!sonioxSockets.has(requestId)) return;
     framesOut++;
     bytesOut += response.payloadData.length;
+    // The config frame goes out first and is text; audio is the binary that
+    // follows, and that is what the clock should start on.
+    if (mark.firstAudioSent === null && framesOut > 1) mark.firstAudioSent = at();
     if (framesOut <= 1) {
       // Redact the key before it reaches a terminal or a log file.
       const config = response.payloadData.replace(/("api_key":")[^"]+/, '$1«redacted»');
@@ -110,6 +138,18 @@ try {
         notable.push(`ERROR ${data.error_code}: ${data.error_message}`);
         console.log(`  ws recv  ERROR ${data.error_code}: ${data.error_message}`);
       } else if (data.tokens?.length) {
+        if (mark.firstTokenAny === null) mark.firstTokenAny = at();
+        for (const t of data.tokens) {
+          if (!t.text || t.text === '<end>') continue;
+          if (t.translation_status === 'translation') {
+            if (!t.is_final && mark.firstTranslationPartial === null)
+              mark.firstTranslationPartial = at();
+            if (t.is_final && mark.firstTranslationFinal === null)
+              mark.firstTranslationFinal = at();
+          } else if (!t.is_final && mark.firstOriginalPartial === null) {
+            mark.firstOriginalPartial = at();
+          }
+        }
         const preview = data.tokens
           .map((t) => `${t.text}${t.is_final ? '*' : ''}[${t.translation_status ?? '-'}]`)
           .join('');
@@ -144,6 +184,30 @@ try {
   );
   console.log(`wav                ${WAV}\n`);
 
+  /*
+   * Stamp the moment a caption actually reaches the screen.
+   *
+   * The loop below still polls once a second to decide pass/fail, which is all
+   * it ever needed to do. But a one-second poll cannot measure a change worth a
+   * few hundred milliseconds, so the timestamp comes from a MutationObserver
+   * installed before Start: it fires on the mutation itself, and the poll only
+   * has to notice, later and lazily, that it already happened.
+   */
+  await page.evaluate(() => {
+    window.__captionAt = null;
+    const settled = () => {
+      const text = document.body.innerText;
+      return !text.includes('Listening…') && !text.includes('Tap Start to listen');
+    };
+    const observer = new MutationObserver(() => {
+      if (window.__captionAt === null && settled()) {
+        window.__captionAt = Date.now();
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+
   await page.click('button[aria-label="▶  Start"]');
   console.log('started, listening…\n');
 
@@ -162,6 +226,21 @@ try {
 
   console.log(`\nws frames          sent=${framesOut} (${Math.round(bytesOut / 1024)} KB audio)  received=${framesIn}`);
   console.log(`token frames       ${notable.length}`);
+
+  // Everything below is measured from the first audio frame. Compare runs
+  // rather than absolute numbers: the WAV loops, so where speech begins inside
+  // it differs from run to run.
+  const captionAt = await page.evaluate(() => window.__captionAt ?? null);
+  const ms = (v) => (v === null ? '       -' : `${String(v).padStart(6)}ms`);
+  console.log('\n--- latency from first audio frame ---');
+  console.log(`  any token back        ${ms(since(mark.firstTokenAny))}`);
+  console.log(`  source, partial       ${ms(since(mark.firstOriginalPartial))}`);
+  console.log(`  translation, partial  ${ms(since(mark.firstTranslationPartial))}   <- live preview`);
+  console.log(`  translation, final    ${ms(since(mark.firstTranslationFinal))}   <- gated by endpoint delay`);
+  console.log(`  caption on screen     ${ms(since(captionAt))}`);
+  if (mark.firstTranslationPartial === null && mark.firstTranslationFinal !== null) {
+    console.log('\n  No partial translation seen - the live preview is not reaching the UI.');
+  }
   if (!captioned) {
     console.log('\nNo caption appeared. Read the counters above:');
     console.log('  sent=0            audio never reached the socket');
