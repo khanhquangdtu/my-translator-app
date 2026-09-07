@@ -96,6 +96,15 @@ type LiveState = {
    * cleared the moment the real translation arrives.
    */
   provisionalDst: string | null;
+  /**
+   * The language that was *spoken* to produce `provisionalDst`.
+   *
+   * Two-way panels each show one direction, so the preview has to know which
+   * column it belongs to. Null when the engine cannot say (one-way, or a
+   * translation whose direction Soniox did not label) — then it is shown
+   * wherever the provisional source is.
+   */
+  provisionalDstLang: string | null;
 
   /** 0..1 mic loudness for the meter */
   level: number;
@@ -149,7 +158,7 @@ type LiveState = {
   addOriginal: (text: string, speaker: string | null, language: string | null) => void;
   addTranslation: (text: string, sourceLanguage?: string | null) => void;
   setProvisional: (text: string, speaker: string | null, language: string | null) => void;
-  setProvisionalDst: (text: string) => void;
+  setProvisionalDst: (text: string, sourceLanguage?: string | null) => void;
   setStatus: (status: EngineStatus) => void;
   setError: (message: string | null, attempt?: number) => void;
   setLevel: (level: number) => void;
@@ -191,6 +200,7 @@ export const useLive = create<LiveState>()((set, get) => ({
   turns: [],
   provisional: null,
   provisionalDst: null,
+  provisionalDstLang: null,
   level: 0,
   lastLoudAtSec: 0,
   lastInteractionSec: 0,
@@ -362,11 +372,14 @@ export const useLive = create<LiveState>()((set, get) => ({
 
     if (index === -1) {
       // Translation with no source waiting — Soniox sometimes leads with it.
+      // It still keeps the spoken language when one is known: that is what the
+      // two-way panels filter on, and a null would strand the line in neither
+      // column.
       const turn: Turn = {
         id: nextTurnId++,
         speaker: null,
         speakerIndex: 0,
-        language: null,
+        language: sourceLanguage ?? null,
         src: '',
         dst: text,
         pending: false,
@@ -410,16 +423,19 @@ export const useLive = create<LiveState>()((set, get) => ({
     set({ provisional: { text, speaker, speakerIndex, language } });
   },
 
-  setProvisionalDst: (text) => {
+  setProvisionalDst: (text, sourceLanguage = null) => {
     // Short-circuit the clear, which arrives on every finalising message and
     // would otherwise write the store — and wake every subscriber — to set null
     // to null.
     if (!text) {
-      if (get().provisionalDst !== null) set({ provisionalDst: null });
+      if (get().provisionalDst !== null) {
+        set({ provisionalDst: null, provisionalDstLang: null });
+      }
       return;
     }
-    if (get().provisionalDst === text) return;
-    set({ provisionalDst: text });
+    const state = get();
+    if (state.provisionalDst === text && state.provisionalDstLang === sourceLanguage) return;
+    set({ provisionalDst: text, provisionalDstLang: sourceLanguage });
   },
 
   setStatus: (status) => {
@@ -580,6 +596,7 @@ export const useLive = create<LiveState>()((set, get) => ({
       turns: [],
       provisional: null,
       provisionalDst: null,
+      provisionalDstLang: null,
       level: 0,
       lastLoudAtSec: 0,
       lastInteractionSec: 0,

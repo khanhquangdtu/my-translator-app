@@ -35,23 +35,39 @@ export type IdentifyResult = {
   names: Record<string, SpeakerMatch>;
 };
 
+/**
+ * A list, not a map keyed by speaker ID.
+ *
+ * The natural shape for this answer is `{ "spk-1": {...} }`, and that is what
+ * this was — but Structured Outputs in `strict` mode has no way to express an
+ * object with arbitrary keys. Every object must pin `additionalProperties:
+ * false` and list every key it accepts in both `properties` and `required`, so
+ * a schema whose keys are only known at runtime is rejected outright (the API
+ * reports it against the root: "'required' … an array including every key in
+ * properties"). The speaker ID becomes a field, and `identifySpeakers` folds
+ * the list back into the map its callers expect.
+ */
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: ['names'],
   properties: {
     names: {
-      type: 'object',
+      type: 'array',
       description:
-        'Map from speaker ID (e.g. "spk-1") to identified name. Only include speakers whose names you found.',
-      additionalProperties: {
+        'One entry per speaker whose name you found. Empty if you found none. Never invent an entry for a speaker you could not identify.',
+      items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'confidence', 'evidence'],
+        required: ['speaker', 'name', 'confidence', 'evidence'],
         properties: {
+          speaker: {
+            type: 'string',
+            description: 'The speaker ID exactly as it appears in the transcript, e.g. "spk-1".',
+          },
           name: {
             type: 'string',
-            description: 'The person\'s name in the original language/script as spoken.',
+            description: 'The person’s name in the original language/script as spoken.',
           },
           confidence: {
             type: 'string',
@@ -86,7 +102,7 @@ const SYSTEM_PROMPT = [
   '- Return the name in its original language/script as spoken.',
   '- If multiple possible names exist for one speaker, pick the one with strongest evidence.',
   '- For "high" confidence, there must be a direct, unambiguous self-introduction by that speaker.',
-  '- Return an empty names object {} if no names can be identified.',
+  '- Return an empty names list if no names can be identified.',
 ].join('\n');
 
 function buildUserMessage(
@@ -186,21 +202,25 @@ export async function identifySpeakers(
     throw new Error('Could not parse identification result');
   }
 
-  // Defensive: validate shape before returning
+  // Defensive: validate shape before returning, and fold the list back into the
+  // map the callers key by speaker ID. A model can satisfy a strict schema and
+  // still return an entry with a blank name or a speaker nobody asked about.
   const names: Record<string, SpeakerMatch> = {};
   const raw = parsed.names;
-  if (raw && typeof raw === 'object') {
-    for (const [id, val] of Object.entries(raw as Record<string, unknown>)) {
+  if (Array.isArray(raw)) {
+    for (const val of raw) {
       if (!val || typeof val !== 'object') continue;
       const v = val as Record<string, unknown>;
       if (
+        typeof v.speaker === 'string' &&
+        v.speaker.trim() &&
         typeof v.name === 'string' &&
         v.name.trim() &&
         typeof v.confidence === 'string' &&
         ['high', 'medium', 'low'].includes(v.confidence) &&
         typeof v.evidence === 'string'
       ) {
-        names[id] = {
+        names[v.speaker.trim()] = {
           name: v.name.trim(),
           confidence: v.confidence as 'high' | 'medium' | 'low',
           evidence: v.evidence,

@@ -46,7 +46,7 @@ export class MockEngine implements TranslationEngine {
   onOriginal?: (text: string, speaker: string | null, language: string | null) => void;
   onTranslation?: (text: string, sourceLanguage: string | null) => void;
   onProvisional?: (text: string, speaker: string | null, language: string | null) => void;
-  onProvisionalTranslation?: (text: string) => void;
+  onProvisionalTranslation?: (text: string, sourceLanguage: string | null) => void;
   onConfidence?: (avgConfidence: number) => void;
   onError?: (message: string) => void;
 
@@ -99,7 +99,7 @@ export class MockEngine implements TranslationEngine {
       if (i % 3 !== 0 && i !== dstChars.length - 1) return;
       this.timers.push(
         setTimeout(() => {
-          this.onProvisionalTranslation?.(line.dst.slice(0, i + 1));
+          this.onProvisionalTranslation?.(line.dst.slice(0, i + 1), 'ja');
         }, dstStart + i * 30)
       );
     });
@@ -115,7 +115,7 @@ export class MockEngine implements TranslationEngine {
     this.timers.push(
       setTimeout(() => {
         // The preview gives way to the real thing, exactly as it does live.
-        this.onProvisionalTranslation?.('');
+        this.onProvisionalTranslation?.('', null);
         this.onTranslation?.(line.dst, 'ja');
       }, finaliseAt + 500)
     );

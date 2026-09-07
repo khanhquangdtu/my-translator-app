@@ -81,7 +81,8 @@ export function useSession() {
     engine.onTranslation = (text, srcLang) => useLive.getState().addTranslation(text, srcLang);
     engine.onProvisional = (text, speaker, language) =>
       useLive.getState().setProvisional(text, speaker, language);
-    engine.onProvisionalTranslation = (text) => useLive.getState().setProvisionalDst(text);
+    engine.onProvisionalTranslation = (text, srcLang) =>
+      useLive.getState().setProvisionalDst(text, srcLang);
     engine.onError = (message) => {
       const attempt = engine instanceof SonioxEngine ? engine.attempt : 0;
       useLive.getState().setError(message, attempt);

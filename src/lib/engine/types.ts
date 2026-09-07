@@ -51,8 +51,13 @@ export type EngineCallbacks = {
   onStatusChange?: (status: EngineStatus) => void;
   /** a finalised chunk of source-language speech */
   onOriginal?: (text: string, speaker: string | null, language: string | null) => void;
-  /** a finalised chunk of translation — pairs with the oldest pending original
-   *  of the given source language (FIFO within that language). */
+  /**
+   * A finalised chunk of translation, with the language it was *spoken* in —
+   * not the one it is written in. It pairs with the oldest pending original of
+   * that language (FIFO within the language), which is what keeps each
+   * direction of a two-way conversation in its own panel. Null when the engine
+   * cannot tell, and then the pairing falls back to plain FIFO.
+   */
   onTranslation?: (text: string, sourceLanguage: string | null) => void;
   /** in-flight recognition; replaces (never appends to) the previous value */
   onProvisional?: (text: string, speaker: string | null, language: string | null) => void;
@@ -64,8 +69,11 @@ export type EngineCallbacks = {
    * still waiting for one; a provisional value must never enter that queue or
    * the pairing scrambles. This is a preview line and nothing else — it is
    * overwritten wholesale and cleared the moment the real translation lands.
+   *
+   * `sourceLanguage` follows the same rule as `onTranslation`'s: the language
+   * spoken, so a two-way preview can be shown in the panel it belongs to.
    */
-  onProvisionalTranslation?: (text: string) => void;
+  onProvisionalTranslation?: (text: string, sourceLanguage: string | null) => void;
   onConfidence?: (avgConfidence: number) => void;
   onError?: (message: string) => void;
 };

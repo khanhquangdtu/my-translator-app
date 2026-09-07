@@ -141,6 +141,7 @@ export default function LiveScreen() {
   const sessionId = useLive((s) => s.sessionId);
   const provisional = useLive((s) => s.provisional);
   const provisionalDst = useLive((s) => s.provisionalDst);
+  const provisionalDstLang = useLive((s) => s.provisionalDstLang);
   const error = useLive((s) => s.error);
   const reconnectAttempt = useLive((s) => s.reconnectAttempt);
   const reconnectMax = useLive((s) => s.reconnectMax);
@@ -603,7 +604,14 @@ export default function LiveScreen() {
       if (provisional?.text && provisional.language === lang) {
         // Show the source text live while speaking; once the translation
         // preview arrives, switch to it so the reader sees the target language.
-        const liveText = provisionalDst || provisional.text;
+        //
+        // Only if that preview is going the same way as this panel. A frame can
+        // still be carrying the tail of the *other* speaker's translation while
+        // these first words come in, and showing it here would put the previous
+        // turn's text above the wrong column for as long as it takes the real
+        // preview to arrive.
+        const dstMatches = !provisionalDstLang || provisionalDstLang === lang;
+        const liveText = (dstMatches && provisionalDst) || provisional.text;
         // Append to the newest block if same speaker is still talking
         const head = lines[0];
         const headSpeaker = blocks.length > 0 ? blocks[blocks.length - 1].speaker : null;
@@ -644,6 +652,7 @@ export default function LiveScreen() {
     turns,
     provisional,
     provisionalDst,
+    provisionalDstLang,
     resolvedA,
     resolvedB,
     prefs.maxLinesKept,

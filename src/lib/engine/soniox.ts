@@ -110,7 +110,7 @@ export class SonioxEngine implements TranslationEngine {
   onOriginal?: (text: string, speaker: string | null, language: string | null) => void;
   onTranslation?: (text: string, sourceLanguage: string | null) => void;
   onProvisional?: (text: string, speaker: string | null, language: string | null) => void;
-  onProvisionalTranslation?: (text: string) => void;
+  onProvisionalTranslation?: (text: string, sourceLanguage: string | null) => void;
   onConfidence?: (avgConfidence: number) => void;
   onError?: (message: string) => void;
 
@@ -345,14 +345,27 @@ export class SonioxEngine implements TranslationEngine {
     if (!data.tokens || data.tokens.length === 0) return;
 
     let originalText = '';
-    let translationText = '';
     let provisionalText = '';
-    let provisionalTranslation = '';
     let hasEnd = false;
     let speaker: string | null = null;
     let language: string | null = null;
     let confidenceSum = 0;
     let confidenceCount = 0;
+
+    /*
+     * Translations are kept apart by the language they are *in*, not merged
+     * into one string.
+     *
+     * A single frame routinely carries the translation of the utterance that
+     * just ended alongside the first original tokens of the one that has
+     * already started — and in two-way mode those two are in opposite
+     * directions. Concatenating them, then labelling the result with whatever
+     * language the last original token happened to be in, is what sent a
+     * translation to the panel of the person who did not say it.
+     */
+    const finalTranslations = new Map<string, string>();
+    let provisionalTranslation = '';
+    let provisionalTranslationLang: string | null = null;
 
     for (const token of data.tokens) {
       if (token.text === '<end>') {
@@ -379,8 +392,13 @@ export class SonioxEngine implements TranslationEngine {
         // Non-final translation is a preview, not a result: it goes out on its
         // own channel and never reaches `onTranslation`, whose FIFO pairing
         // would be scrambled by a value that is still being rewritten.
-        if (token.is_final) translationText += token.text;
-        else provisionalTranslation += token.text;
+        const into = token.language ?? '';
+        if (token.is_final) {
+          finalTranslations.set(into, (finalTranslations.get(into) ?? '') + token.text);
+        } else {
+          provisionalTranslation += token.text;
+          provisionalTranslationLang = token.language ?? provisionalTranslationLang;
+        }
       } else {
         // 'original', 'none' (third-language speech in two-way mode), or absent
         if (token.is_final) originalText += token.text;
@@ -394,14 +412,17 @@ export class SonioxEngine implements TranslationEngine {
     if (originalText.trim()) {
       this.onOriginal?.(originalText, speaker, language);
     }
-    if (translationText.trim()) {
-      this.onTranslation?.(translationText, language);
-      this.addToHistory(translationText);
+    let anyTranslation = false;
+    for (const [into, text] of finalTranslations) {
+      if (!text.trim()) continue;
+      anyTranslation = true;
+      this.onTranslation?.(text, this.sourceOfTranslation(into, language));
+      this.addToHistory(text);
     }
 
     if (provisionalText.trim()) {
       this.onProvisional?.(provisionalText, speaker, language);
-    } else if (originalText.trim() || translationText.trim() || hasEnd) {
+    } else if (originalText.trim() || anyTranslation || hasEnd) {
       // the in-flight line resolved into a final one — clear it
       this.onProvisional?.('', null, null);
     }
@@ -412,10 +433,41 @@ export class SonioxEngine implements TranslationEngine {
     // reader actually looks at — before it, the translation could not appear
     // until Soniox had decided the utterance was over.
     if (provisionalTranslation.trim()) {
-      this.onProvisionalTranslation?.(provisionalTranslation);
-    } else if (translationText.trim() || hasEnd) {
-      this.onProvisionalTranslation?.('');
+      this.onProvisionalTranslation?.(
+        provisionalTranslation,
+        this.sourceOfTranslation(provisionalTranslationLang ?? '', language)
+      );
+    } else if (anyTranslation || hasEnd) {
+      this.onProvisionalTranslation?.('', null);
     }
+  }
+
+  /**
+   * Which language was *spoken* to produce a translation written in `into`.
+   *
+   * This is the whole of the two-way routing rule. Soniox labels a translated
+   * token with the language it is written in, never with the one it came from,
+   * so the direction has to be recovered from the session's own A/B pair: a
+   * line that arrives in B was said in A, and vice versa. `liveStore` pairs on
+   * the spoken language — that is what `Turn.language` holds, and what the
+   * panels filter by — so the mapping has to happen here, where the config is.
+   *
+   * `fallback` is the language of the original tokens in the same frame. It is
+   * right for one-way, where there is only one direction to be in, and refused
+   * for two-way, where it is exactly the wrong answer whenever a frame carries
+   * one speaker's translation next to the other speaker's first words: better
+   * to fall back to FIFO than to name the wrong side with confidence.
+   */
+  private sourceOfTranslation(into: string, fallback: string | null): string | null {
+    const config = this.config;
+    if (config?.translationType !== 'two_way') return fallback;
+
+    const a = config.languageA;
+    const b = config.languageB;
+    if (!a || !b || !into) return null;
+    if (into === b) return a;
+    if (into === a) return b;
+    return null;
   }
 
   // ─── Session lifecycle ───────────────────────────────────────────────
