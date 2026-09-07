@@ -35,7 +35,7 @@
 }
 
 .panelsRotated {
-  padding-left: var(--control-strip);
+  padding-top: var(--control-strip);
 }
 
 /* Each slot is the fixed 50 % container; the content inside rotates. */
@@ -214,18 +214,18 @@
 }
 
 .controlsRotated {
-  left: var(--control-inset);
-  top: 50%;
-  transform: translateY(-50%);
+  top: var(--control-inset);
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 /*
- * Reversed so the first button lands on the left of the screen, not the right:
- * the container's local +y points left once it has been turned, so a plain
- * `column` would run Stop → Swap right-to-left.
+ * A row in local coords becomes a vertical strip on the portrait screen after
+ * the container's 90° rotation, and reads left-to-right when the phone is
+ * held sideways — matching the upright layout order.
  */
 .controlsRotated .controlButtons {
-  flex-direction: column-reverse;
+  flex-direction: row;
 }
 
 .controlBtn {
