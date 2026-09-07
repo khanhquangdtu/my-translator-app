@@ -23,3 +23,9 @@ Dockerfile
 .dockerignore
 docker-compose.yml
 README.md
+
+# The deploy runbook and its script. Excluded not just because the image has no
+# use for them, but because they are edited far more often than the app: left in
+# the context, a comment fix in the runbook would invalidate the COPY layer and
+# force a full rebuild of the thing it is meant to be deploying.
+.claude
