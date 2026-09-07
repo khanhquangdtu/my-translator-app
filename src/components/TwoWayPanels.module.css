@@ -215,8 +215,10 @@
 
 .controlsRotated {
   top: var(--control-inset);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  flex-direction: row;
+  align-items: center;
 }
 
 /*

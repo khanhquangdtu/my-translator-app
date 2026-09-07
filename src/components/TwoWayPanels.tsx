@@ -122,9 +122,6 @@ export function TwoWayPanels({
           ref={index === 0 ? slotRef : undefined}
           className={cx(styles.slot, index > 0 && styles.slotDivider)}>
           <div style={contentStyle(index)}>
-            {/* Upright, this sits in the control bar instead — see below. */}
-            {rotated && <PanelHead panel={panel} />}
-
             <div className={cx(styles.lines, 'noscrollbar')}>
               {panel.lines.map((line) => (
                 <span
@@ -144,25 +141,17 @@ export function TwoWayPanels({
       ))}
 
       {/*
-        Upright, the bar carries the two panel headers as well as the buttons,
-        so the whole of the chrome is one row deep instead of two — on a phone
-        held sideways that band is a real fraction of the reading area. The
-        headers are laid out as flex cells rather than centred over their own
-        panel, which is what keeps them off the buttons on a narrow screen:
-        centring collided below about 764 px of width.
-
-        Rotated, they stay inside their panel, where turning one panel turns
-        its language pills with it. That is the table-mode case, and a header
-        that stayed upright while its own text turned over would belong to
-        neither reader.
+        The bar carries both panel headers and the buttons in a single row,
+        so the chrome is one strip deep in both orientations — saving vertical
+        space that belongs to the transcript.
       */}
-      {(onRotate || onStop || !rotated) && (
+      {(onRotate || onStop) && (
         <div
           className={cx(
             styles.controls,
             rotated ? styles.controlsRotated : styles.controlsUpright
           )}>
-          {!rotated && <PanelHead panel={panels[0]} className={styles.headInBar} />}
+          <PanelHead panel={panels[0]} className={styles.headInBar} />
           <div className={styles.controlButtons}>
           {onStop && (
             <button
@@ -210,7 +199,7 @@ export function TwoWayPanels({
             </button>
           )}
           </div>
-          {!rotated && <PanelHead panel={panels[1]} className={styles.headInBar} />}
+          <PanelHead panel={panels[1]} className={styles.headInBar} />
         </div>
       )}
     </div>
