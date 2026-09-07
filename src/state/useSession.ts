@@ -112,7 +112,7 @@ export function useSession() {
       targetLanguage: resolveLanguage(prefs.targetLanguage),
       translationType: prefs.translationType,
       languageA: resolveLanguage(prefs.languageA),
-      languageB: prefs.languageB,
+      languageB: resolveLanguage(prefs.languageB),
       languageHintsStrict: prefs.languageHintsStrict,
       endpointDelay: prefs.endpointDelay,
       customContext: prefs.customContext,

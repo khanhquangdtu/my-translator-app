@@ -492,7 +492,6 @@ export default function LiveScreen() {
         ? 'warn'
         : 'live';
 
-  // Two-way is a UI layout, not an engine mode — each panel is one-way.
   const twoWay = prefs.viewMode === 'panels';
   const resolvedA = resolveLanguage(prefs.languageA);
   const resolvedB = resolveLanguage(prefs.languageB);
@@ -500,15 +499,16 @@ export default function LiveScreen() {
   const toggleTwoWay = useCallback(() => {
     setOverflowOpen(false);
     if (twoWay) {
-      setPref('viewMode', 'stream');
+      merge({ viewMode: 'stream', translationType: 'one_way' });
     } else {
       merge({
         viewMode: 'panels',
+        translationType: 'two_way',
         languageA: prefs.sourceLanguage,
         languageB: resolveLanguage(prefs.targetLanguage),
       });
     }
-  }, [twoWay, prefs.sourceLanguage, prefs.targetLanguage, setPref, merge]);
+  }, [twoWay, prefs.sourceLanguage, prefs.targetLanguage, merge]);
 
   // Two-way forces landscape so each panel gets enough width.
   useEffect(() => {
