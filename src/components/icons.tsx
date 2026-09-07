@@ -224,3 +224,28 @@ export function InstallIcon({ size = 16, color }: IconProps) {
     </svg>
   );
 }
+
+/**
+ * Translation direction, in the two-way panel headers: source → target.
+ *
+ * Drawn rather than typed for the reason the file exists, plus one specific to
+ * this arrow. `→` (U+2192) is not in most UI faces, so it comes from whatever
+ * fallback the platform picks, and that font's metrics are not the ones the
+ * surrounding 11px pills were laid out against — on Android the glyph sat low
+ * enough in its line box that the stem was cut off along the bottom. A path
+ * has no metrics to disagree about: it is the size it is asked to be.
+ */
+export function ArrowRightIcon({ size = 14, color }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M4 12h15" stroke={color} strokeWidth={STROKE} strokeLinecap="round" />
+      <path
+        d="m13.5 6.5 5.5 5.5-5.5 5.5"
+        stroke={color}
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

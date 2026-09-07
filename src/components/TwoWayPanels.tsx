@@ -15,7 +15,9 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useWindowSize } from '@/hooks/useWindowSize';
+import { color } from '@/theme/tokens';
 
+import { ArrowRightIcon } from './icons';
 import { cx } from './primitives';
 import styles from './TwoWayPanels.module.css';
 
@@ -249,10 +251,12 @@ function PanelHead({ panel, className }: { panel: TwoWayPanelData; className?: s
           className={styles.swapBtn}
           onClick={panel.onSwap}
           aria-label={`Translating ${panel.sourceLabel} to ${panel.targetLabel} — tap to reverse`}>
-          →
+          <ArrowRightIcon color={color.accent} />
         </button>
       ) : (
-        <span className={styles.arrow}>→</span>
+        <span className={styles.arrow}>
+          <ArrowRightIcon size={12} color={color.textMuted} />
+        </span>
       )}
       {panel.onPickTarget ? (
         <button type="button" className={styles.langBtn} onClick={panel.onPickTarget}>

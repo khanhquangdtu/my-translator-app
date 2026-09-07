@@ -84,16 +84,23 @@
   color: var(--text-secondary);
 }
 
+/*
+ * Both hold an SVG rather than a glyph, so they are laid out as boxes and not
+ * as text. `display: flex` is what makes that true: an inline SVG sits on the
+ * text baseline like a letter, which leaves room below it for a descender that
+ * a path does not have — the arrow rode high in its line box and its lower
+ * half fell outside, which is what was being cut off. A flex item has no
+ * baseline to sit on and no strut to be measured against.
+ */
+
 .arrow {
-  font-size: 11px;
-  line-height: 1;
   color: var(--text-muted);
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
 }
 
 .swapBtn {
-  font-size: 14px;
-  line-height: 1;
   color: var(--accent);
   flex: 0 0 auto;
   padding: 2px 4px;
