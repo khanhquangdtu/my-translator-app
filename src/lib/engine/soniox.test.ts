@@ -50,7 +50,12 @@ function engineWith(config: EngineConfig) {
   engine.onTranslation = (text, source) => translations.push([text, source]);
   engine.onProvisionalTranslation = (text, source) => previews.push([text, source]);
 
-  return { feed: (tokens: SonioxToken[]) => internals.handleResponse({ tokens }), translations, previews };
+  return {
+    engine,
+    feed: (tokens: SonioxToken[]) => internals.handleResponse({ tokens }),
+    translations,
+    previews,
+  };
 }
 
 const TWO_WAY: EngineConfig = { translationType: 'two_way', languageA: 'vi', languageB: 'en' };
@@ -123,6 +128,20 @@ describe('two-way translation routing', () => {
     // Null falls back to FIFO pairing, which is a guess the store makes
     // knowingly - better than naming the wrong speaker with confidence.
     expect(translations).toEqual([['Hello', null]]);
+  });
+
+  it('routes by the reconfigured pair, not the one it started with', () => {
+    const { engine, feed, translations } = engineWith(TWO_WAY);
+
+    // The user re-picks a panel language mid-session. There is no socket in
+    // this test, so `reconfigure` only stores the config — which is exactly
+    // the seam routing reads.
+    engine.reconfigure({ translationType: 'two_way', languageA: 'vi', languageB: 'fr' });
+
+    // Unattributed token written in the new B: said in A under the new pair.
+    feed([{ text: 'Bonjour', is_final: true, language: 'fr', translation_status: 'translation' }]);
+
+    expect(translations).toEqual([['Bonjour', 'vi']]);
   });
 
   it('routes the live preview the same way', () => {

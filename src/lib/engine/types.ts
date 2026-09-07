@@ -81,6 +81,14 @@ export type EngineCallbacks = {
 export interface TranslationEngine extends EngineCallbacks {
   readonly name: string;
   connect(config: EngineConfig): void;
+  /**
+   * Apply a new config to a session that is already running, without dropping
+   * audio. The two-way panels let the user change languages mid-session, and a
+   * session that keeps translating the pair it started with makes those
+   * controls lie. Optional: an engine that cannot re-configure in place simply
+   * omits it, and the change waits for the next connect.
+   */
+  reconfigure?(config: EngineConfig): void;
   /** raw PCM s16le 16 kHz mono */
   sendAudio(pcm: ArrayBuffer): void;
   disconnect(): void;

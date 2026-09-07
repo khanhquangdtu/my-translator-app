@@ -199,7 +199,12 @@ export class SonioxEngine implements TranslationEngine {
     next.binaryType = 'arraybuffer';
 
     next.onopen = () => {
-      next.send(JSON.stringify(this.buildConfigMessage(apiKey, config, carryoverContext)));
+      // `this.config`, not the `config` this call closed over: a reconfigure
+      // that lands while the token fetch is in flight updates the field, and
+      // the socket should come up speaking the languages the user now wants.
+      next.send(
+        JSON.stringify(this.buildConfigMessage(apiKey, this.config ?? config, carryoverContext))
+      );
 
       // Make-before-break: only now is it safe to retire the previous socket.
       const old = this.ws;
@@ -352,6 +357,29 @@ export class SonioxEngine implements TranslationEngine {
       if (socket.readyState !== WebSocket.OPEN) break;
       socket.send(chunk);
     }
+  }
+
+  /**
+   * Apply a new translation config to a live session.
+   *
+   * A config Soniox has accepted cannot be amended over the same socket, so
+   * this rides the make-before-break reset the 3-minute rollover already uses:
+   * a new socket is opened and configured with the new languages before the
+   * old one is retired, audio flowing into the old one throughout, with the
+   * recent-translation context carried over. To the user it is seamless — and
+   * it is what makes the two-way panels' language buttons true while
+   * listening, instead of only at the next Start.
+   *
+   * Stored before the connectivity check on purpose: if the first connect is
+   * still fetching its token, `onopen` reads `this.config` and the in-flight
+   * socket comes up with the new languages on its own — no second socket
+   * needed. A reconnect timer likewise re-reads it when it fires.
+   */
+  reconfigure(config: EngineConfig) {
+    const wasOpen = this.ws !== null;
+    this.config = config;
+    if (this.intentionalDisconnect || !wasOpen) return;
+    void this.doConnect(config, this.getCarryoverContext());
   }
 
   disconnect() {

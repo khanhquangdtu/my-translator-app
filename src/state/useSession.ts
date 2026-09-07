@@ -20,15 +20,33 @@ import { useMicCapture } from '@/lib/audio/capture';
 import { hasOpenAIKey, hasSonioxKey } from '@/lib/config/capabilities';
 import { MOCK_ENABLED, MockEngine } from '@/lib/engine/mock';
 import { SonioxEngine } from '@/lib/engine/soniox';
-import type { TranslationEngine } from '@/lib/engine/types';
+import type { EngineConfig, TranslationEngine } from '@/lib/engine/types';
 import { activateKeepAwake, deactivateKeepAwake } from '@/lib/platform';
 import { deferSync, deleteSession, saveSession } from '@/lib/sessions/store';
 import { startIdentification, stopIdentification } from '@/lib/speakers/identify';
 import { useLive } from '@/state/liveStore';
-import { resolveLanguage, useSettings } from '@/state/settingsStore';
+import { resolveLanguage, useSettings, type Prefs } from '@/state/settingsStore';
 
 /** A crash should cost at most this much of the live chunk. */
 const AUTOSAVE_MS = 15000;
+
+/**
+ * The slice of the prefs the engine actually consumes, resolved the same way
+ * everywhere it is built — Start and mid-session reconfigure must produce the
+ * identical config for identical prefs, or comparing the two is meaningless.
+ */
+function engineConfig(prefs: Prefs): EngineConfig {
+  return {
+    sourceLanguage: prefs.sourceLanguage,
+    targetLanguage: resolveLanguage(prefs.targetLanguage),
+    translationType: prefs.translationType,
+    languageA: resolveLanguage(prefs.languageA),
+    languageB: resolveLanguage(prefs.languageB),
+    languageHintsStrict: prefs.languageHintsStrict,
+    endpointDelay: prefs.endpointDelay,
+    customContext: prefs.customContext,
+  };
+}
 
 export type StartResult = 'ok' | 'not-configured' | 'permission-denied' | 'start-failed';
 
@@ -108,16 +126,7 @@ export function useSession() {
     engineRef.current = engine;
     // No apiKey: the browser holds none. SonioxEngine mints a short-lived one
     // per socket from /api/soniox/token.
-    engine.connect({
-      sourceLanguage: prefs.sourceLanguage,
-      targetLanguage: resolveLanguage(prefs.targetLanguage),
-      translationType: prefs.translationType,
-      languageA: resolveLanguage(prefs.languageA),
-      languageB: resolveLanguage(prefs.languageB),
-      languageHintsStrict: prefs.languageHintsStrict,
-      endpointDelay: prefs.endpointDelay,
-      customContext: prefs.customContext,
-    });
+    engine.connect(engineConfig(prefs));
 
     const micError = await mic.start();
     if (micError) {
@@ -221,6 +230,27 @@ export function useSession() {
     await stop();
     return start();
   }, [start, stop]);
+
+  /*
+   * Language changes made while listening reach the engine, not just the next
+   * session. The two-way panel headers exist to be tapped mid-session — pick a
+   * language, flip a direction, toggle two-way from the ⋯ sheet — and every
+   * one of those writes prefs. Without this, the panel said "EN → VI" while
+   * Soniox kept translating the pair it was started with; English speech was
+   * then a third language to it, transcribed but never translated, and the
+   * reader saw their words recognised with no translation anywhere.
+   */
+  useEffect(() => {
+    return useSettings.subscribe((state, prev) => {
+      const engine = engineRef.current;
+      if (!engine?.reconfigure || !useLive.getState().running) return;
+      const next = engineConfig(state.prefs);
+      // Both sides come out of `engineConfig`, so key order matches and the
+      // string comparison is exact. Prefs the engine ignores change nothing.
+      if (JSON.stringify(next) === JSON.stringify(engineConfig(prev.prefs))) return;
+      engine.reconfigure(next);
+    });
+  }, []);
 
   useEffect(() => {
     return () => {

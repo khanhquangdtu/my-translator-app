@@ -501,15 +501,37 @@ export default function LiveScreen() {
     setOverflowOpen(false);
     if (twoWay) {
       merge({ viewMode: 'stream', translationType: 'one_way' });
-    } else {
-      merge({
-        viewMode: 'panels',
-        translationType: 'two_way',
-        languageA: prefs.sourceLanguage,
-        languageB: resolveLanguage(prefs.targetLanguage),
-      });
+      return;
     }
-  }, [twoWay, prefs.sourceLanguage, prefs.targetLanguage, merge]);
+    /*
+     * Seed the pair from the one-way languages — but never as X ↔ X. With
+     * both sides on AUTO (the default) source and target resolve to the same
+     * device language, and a same-language pair gives Soniox nothing to
+     * translate: the panels came up silent with two identical headers. Fall
+     * back to the stored pair, and past that to English against a recently
+     * used language, so the toggle always lands on a pair that translates.
+     */
+    let languageA = prefs.sourceLanguage;
+    let languageB = resolveLanguage(prefs.targetLanguage);
+    if (resolveLanguage(languageA) === languageB) {
+      languageA = prefs.languageA;
+      languageB = prefs.languageB;
+    }
+    if (resolveLanguage(languageA) === resolveLanguage(languageB)) {
+      languageB =
+        prefs.recentLanguages.find((c) => resolveLanguage(c) !== resolveLanguage(languageA)) ??
+        (resolveLanguage(languageA) === 'en' ? 'vi' : 'en');
+    }
+    merge({ viewMode: 'panels', translationType: 'two_way', languageA, languageB });
+  }, [
+    twoWay,
+    prefs.sourceLanguage,
+    prefs.targetLanguage,
+    prefs.languageA,
+    prefs.languageB,
+    prefs.recentLanguages,
+    merge,
+  ]);
 
   // Two-way forces landscape so each panel gets enough width.
   useEffect(() => {
