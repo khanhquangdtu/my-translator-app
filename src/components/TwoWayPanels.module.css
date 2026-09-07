@@ -1,10 +1,41 @@
+/*
+ * The control strip: one 48 px button plus the same inset above and below it.
+ * Declared here because four rules below have to agree on it — the padding
+ * that reserves the strip and the offset that sits the buttons inside it, once
+ * each for upright and rotated. Change the button size and only these two
+ * numbers move.
+ */
 .panels {
+  --control-inset: 10px;
+  --control-strip: 68px;
+
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: row;
   overflow: hidden;
   position: relative;
+}
+
+/*
+ * A strip along the top of the screen that belongs to the controls alone.
+ *
+ * Reserved rather than overlaid: floating the buttons over the panels put them
+ * on top of the text in the one layout where every line is the whole point —
+ * over the language pills when upright, over the first characters of every
+ * line in the top panel when rotated. Padding the container instead means the
+ * slots simply start below the strip and nothing is ever covered.
+ *
+ * Which side is "the top of the screen" depends on the rotation, hence two
+ * rules: rotated, the container's local +x runs down the screen, so its left
+ * padding is the strip.
+ */
+.panelsUpright {
+  padding-top: var(--control-strip);
+}
+
+.panelsRotated {
+  padding-left: var(--control-strip);
 }
 
 /* Each slot is the fixed 50 % container; the content inside rotates. */
@@ -71,10 +102,27 @@
   opacity: 0.6;
 }
 
+/*
+ * Each panel scrolls on its own.
+ *
+ * The axis is the content's local one, which is the screen's *horizontal* when
+ * the container is rotated — the same axis the reader's eye travels, since
+ * they are looking at the phone side-on. `touch-action` has to name it
+ * explicitly: the browser resolves that against the untransformed box, so the
+ * default heuristic offers the wrong axis and the panel refuses to move under
+ * a finger.
+ *
+ * `overscroll-behavior: contain` stops a panel that has hit its end from
+ * handing the gesture to the page behind it, which on a phone shows up as the
+ * whole rotated layout bouncing.
+ */
 .lines {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   padding: 0 16px 16px;
 }
 
@@ -94,17 +142,78 @@
   color: rgba(255, 255, 255, 0.55);
 }
 
-/* ── Floating controls centred between the two panels ── */
+/*
+ * ── Floating controls, along the top edge of the screen ──
+ *
+ * They used to sit in the middle of the container, which put them over the
+ * text in the one layout where every line matters and, in portrait, over the
+ * part of the container that hangs off the screen entirely. The top edge is
+ * out of the reading path and is the same place in both orientations.
+ *
+ * "The top of the screen" is written differently in each, because in portrait
+ * the container is rotated 90°: its local +x runs *down* the screen and its
+ * local +y runs *right to left*. So the upright rule pins the top edge and
+ * lays the buttons out in a row; the rotated one pins the local left edge —
+ * which is the screen's top — and lays them out in a reversed column, which
+ * comes out as that same left-to-right row once the rotation is applied.
+ *
+ * Upright the bar carries the two panel headers as well, which is why the
+ * buttons have a wrapper of their own: the bar's own flex axis is spacing the
+ * three cells apart, so it cannot also be the one spacing the buttons.
+ */
 
 .controls {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   display: flex;
-  flex-direction: column;
   gap: 12px;
   z-index: 10;
+}
+
+/*
+ * Upright the bar spans the full width, because it holds the two panel headers
+ * as well as the buttons. Three flex cells — header, buttons, header — with the
+ * headers taking the slack, so they centre over their own half without ever
+ * reaching the buttons. Centring each header over its panel independently is
+ * what collides: the buttons are 288 px wide, so anything under about 764 px of
+ * viewport overlapped them.
+ */
+.controlsUpright {
+  top: var(--control-inset);
+  left: 0;
+  right: 0;
+  flex-direction: row;
+  align-items: center;
+}
+
+.controlButtons {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.headInBar {
+  flex: 1;
+  min-width: 0;
+  /* The band already spaces the bar; the panel version's own padding would
+     push the pills out of line with the buttons beside them. */
+  padding: 0;
+  margin-bottom: 0;
+}
+
+.controlsRotated {
+  left: var(--control-inset);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/*
+ * Reversed so the first button lands on the left of the screen, not the right:
+ * the container's local +y points left once it has been turned, so a plain
+ * `column` would run Stop → Swap right-to-left.
+ */
+.controlsRotated .controlButtons {
+  flex-direction: column-reverse;
 }
 
 .controlBtn {

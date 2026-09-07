@@ -72,8 +72,19 @@ export function TwoWayPanels({
 
   // In portrait, rotate the entire container 90° so the panels read
   // left-to-right in landscape orientation even while the device is upright.
-  const containerStyle = !landscape && width > 0
+  //
+  // `flex: '0 0 auto'` is load-bearing, not tidiness. `.panels` carries
+  // `flex: 1`, and in the column that `Screen` lays out that makes height the
+  // flex main size — so flex-grow won, the container was stretched from the
+  // 390 asked for here to the full 844 of the viewport, and after the rotation
+  // that surplus hung off the *left* edge of the screen. The controls sat in
+  // the middle of it: A⁺, A⁻ and Swap were rendered at negative x, entirely
+  // outside the window. Opting out of flex sizing is what makes the width and
+  // height on these two lines the sizes the element actually gets.
+  const rotated = !landscape && width > 0;
+  const containerStyle = rotated
     ? {
+        flex: '0 0 auto',
         width: height,
         height: width,
         transform: 'rotate(90deg)',
@@ -100,46 +111,17 @@ export function TwoWayPanels({
   };
 
   return (
-    <div className={styles.panels} style={containerStyle}>
+    <div
+      className={cx(styles.panels, rotated ? styles.panelsRotated : styles.panelsUpright)}
+      style={containerStyle}>
       {panels.map((panel, index) => (
         <div
           key={index}
           ref={index === 0 ? slotRef : undefined}
           className={cx(styles.slot, index > 0 && styles.slotDivider)}>
           <div style={contentStyle(index)}>
-            <div className={styles.head}>
-              {panel.onPickSource ? (
-                <button
-                  type="button"
-                  className={styles.langBtn}
-                  onClick={panel.onPickSource}>
-                  {panel.sourceLabel}
-                </button>
-              ) : (
-                <span className={styles.langLabel}>{panel.sourceLabel}</span>
-              )}
-              {panel.onSwap ? (
-                <button
-                  type="button"
-                  className={styles.swapBtn}
-                  onClick={panel.onSwap}
-                  aria-label="Swap direction">
-                  ⇄
-                </button>
-              ) : (
-                <span className={styles.arrow}>→</span>
-              )}
-              {panel.onPickTarget ? (
-                <button
-                  type="button"
-                  className={styles.langBtn}
-                  onClick={panel.onPickTarget}>
-                  {panel.targetLabel}
-                </button>
-              ) : (
-                <span className={styles.langLabel}>{panel.targetLabel}</span>
-              )}
-            </div>
+            {/* Upright, this sits in the control bar instead — see below. */}
+            {rotated && <PanelHead panel={panel} />}
 
             <div className={cx(styles.lines, 'noscrollbar')}>
               {panel.lines.map((line) => (
@@ -159,8 +141,27 @@ export function TwoWayPanels({
         </div>
       ))}
 
-      {(onRotate || onStop) && (
-        <div className={styles.controls}>
+      {/*
+        Upright, the bar carries the two panel headers as well as the buttons,
+        so the whole of the chrome is one row deep instead of two — on a phone
+        held sideways that band is a real fraction of the reading area. The
+        headers are laid out as flex cells rather than centred over their own
+        panel, which is what keeps them off the buttons on a narrow screen:
+        centring collided below about 764 px of width.
+
+        Rotated, they stay inside their panel, where turning one panel turns
+        its language pills with it. That is the table-mode case, and a header
+        that stayed upright while its own text turned over would belong to
+        neither reader.
+      */}
+      {(onRotate || onStop || !rotated) && (
+        <div
+          className={cx(
+            styles.controls,
+            rotated ? styles.controlsRotated : styles.controlsUpright
+          )}>
+          {!rotated && <PanelHead panel={panels[0]} className={styles.headInBar} />}
+          <div className={styles.controlButtons}>
           {onStop && (
             <button
               type="button"
@@ -206,7 +207,48 @@ export function TwoWayPanels({
               ⇄
             </button>
           )}
+          </div>
+          {!rotated && <PanelHead panel={panels[1]} className={styles.headInBar} />}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One panel's `EN ⇄ VI` header.
+ *
+ * Extracted because it is rendered in two different places depending on the
+ * orientation — inside the panel when the container is rotated, in the control
+ * bar when it is not — and the two must stay the same control.
+ */
+function PanelHead({ panel, className }: { panel: TwoWayPanelData; className?: string }) {
+  return (
+    <div className={cx(styles.head, className)}>
+      {panel.onPickSource ? (
+        <button type="button" className={styles.langBtn} onClick={panel.onPickSource}>
+          {panel.sourceLabel}
+        </button>
+      ) : (
+        <span className={styles.langLabel}>{panel.sourceLabel}</span>
+      )}
+      {panel.onSwap ? (
+        <button
+          type="button"
+          className={styles.swapBtn}
+          onClick={panel.onSwap}
+          aria-label="Swap direction">
+          ⇄
+        </button>
+      ) : (
+        <span className={styles.arrow}>→</span>
+      )}
+      {panel.onPickTarget ? (
+        <button type="button" className={styles.langBtn} onClick={panel.onPickTarget}>
+          {panel.targetLabel}
+        </button>
+      ) : (
+        <span className={styles.langLabel}>{panel.targetLabel}</span>
       )}
     </div>
   );
