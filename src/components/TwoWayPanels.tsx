@@ -216,7 +216,18 @@ export function TwoWayPanels({
 }
 
 /**
- * One panel's `EN ⇄ VI` header.
+ * One panel's `EN → VI` header.
+ *
+ * The arrow points one way because the panel only goes one way: it shows what
+ * was spoken in EN, rendered in VI, and nothing else. A `⇄` here said the
+ * opposite — that this panel carried both directions — which is precisely what
+ * distinguishes it from the panel beside it, and it read the same in both.
+ * Tapping still swaps; the labels either side are what change, and a one-way
+ * arrow is what makes that change legible.
+ *
+ * `⇄` survives on the bar's Swap button, which really does exchange the two
+ * panels, so the two glyphs now mean two different things instead of one thing
+ * twice.
  *
  * Extracted because it is rendered in two different places depending on the
  * orientation — inside the panel when the container is rotated, in the control
@@ -237,8 +248,8 @@ function PanelHead({ panel, className }: { panel: TwoWayPanelData; className?: s
           type="button"
           className={styles.swapBtn}
           onClick={panel.onSwap}
-          aria-label="Swap direction">
-          ⇄
+          aria-label={`Translating ${panel.sourceLabel} to ${panel.targetLabel} — tap to reverse`}>
+          →
         </button>
       ) : (
         <span className={styles.arrow}>→</span>
