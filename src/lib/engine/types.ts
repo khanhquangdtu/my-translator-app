@@ -51,8 +51,9 @@ export type EngineCallbacks = {
   onStatusChange?: (status: EngineStatus) => void;
   /** a finalised chunk of source-language speech */
   onOriginal?: (text: string, speaker: string | null, language: string | null) => void;
-  /** a finalised chunk of translation — pairs with the oldest pending original */
-  onTranslation?: (text: string) => void;
+  /** a finalised chunk of translation — pairs with the oldest pending original
+   *  of the given source language (FIFO within that language). */
+  onTranslation?: (text: string, sourceLanguage: string | null) => void;
   /** in-flight recognition; replaces (never appends to) the previous value */
   onProvisional?: (text: string, speaker: string | null, language: string | null) => void;
   /**

@@ -44,7 +44,7 @@ export class MockEngine implements TranslationEngine {
 
   onStatusChange?: (status: EngineStatus) => void;
   onOriginal?: (text: string, speaker: string | null, language: string | null) => void;
-  onTranslation?: (text: string) => void;
+  onTranslation?: (text: string, sourceLanguage: string | null) => void;
   onProvisional?: (text: string, speaker: string | null, language: string | null) => void;
   onProvisionalTranslation?: (text: string) => void;
   onConfidence?: (avgConfidence: number) => void;
@@ -116,7 +116,7 @@ export class MockEngine implements TranslationEngine {
       setTimeout(() => {
         // The preview gives way to the real thing, exactly as it does live.
         this.onProvisionalTranslation?.('');
-        this.onTranslation?.(line.dst);
+        this.onTranslation?.(line.dst, 'ja');
       }, finaliseAt + 500)
     );
 

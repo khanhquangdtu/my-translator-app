@@ -108,7 +108,7 @@ export class SonioxEngine implements TranslationEngine {
 
   onStatusChange?: (status: EngineStatus) => void;
   onOriginal?: (text: string, speaker: string | null, language: string | null) => void;
-  onTranslation?: (text: string) => void;
+  onTranslation?: (text: string, sourceLanguage: string | null) => void;
   onProvisional?: (text: string, speaker: string | null, language: string | null) => void;
   onProvisionalTranslation?: (text: string) => void;
   onConfidence?: (avgConfidence: number) => void;
@@ -395,7 +395,7 @@ export class SonioxEngine implements TranslationEngine {
       this.onOriginal?.(originalText, speaker, language);
     }
     if (translationText.trim()) {
-      this.onTranslation?.(translationText);
+      this.onTranslation?.(translationText, language);
       this.addToHistory(translationText);
     }
 

@@ -78,7 +78,7 @@ export function useSession() {
     engine.onStatusChange = (status) => useLive.getState().setStatus(status);
     engine.onOriginal = (text, speaker, language) =>
       useLive.getState().addOriginal(text, speaker, language);
-    engine.onTranslation = (text) => useLive.getState().addTranslation(text);
+    engine.onTranslation = (text, srcLang) => useLive.getState().addTranslation(text, srcLang);
     engine.onProvisional = (text, speaker, language) =>
       useLive.getState().setProvisional(text, speaker, language);
     engine.onProvisionalTranslation = (text) => useLive.getState().setProvisionalDst(text);

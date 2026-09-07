@@ -147,7 +147,7 @@ type LiveState = {
   beginChunk: () => void;
   endChunk: () => void;
   addOriginal: (text: string, speaker: string | null, language: string | null) => void;
-  addTranslation: (text: string) => void;
+  addTranslation: (text: string, sourceLanguage?: string | null) => void;
   setProvisional: (text: string, speaker: string | null, language: string | null) => void;
   setProvisionalDst: (text: string) => void;
   setStatus: (status: EngineStatus) => void;
@@ -350,9 +350,15 @@ export const useLive = create<LiveState>()((set, get) => ({
     });
   },
 
-  addTranslation: (text) => {
+  addTranslation: (text, sourceLanguage) => {
     const state = get();
-    const index = state.turns.findIndex((t) => t.pending);
+    // In two-way mode, translations for both languages are interleaved. Match
+    // the translation to a pending turn of the same source language so an
+    // English→Vietnamese translation doesn't land on a Vietnamese turn (or
+    // vice versa). Falls back to plain FIFO when the language is unknown.
+    const index = sourceLanguage
+      ? state.turns.findIndex((t) => t.pending && t.language === sourceLanguage)
+      : state.turns.findIndex((t) => t.pending);
 
     if (index === -1) {
       // Translation with no source waiting — Soniox sometimes leads with it.
