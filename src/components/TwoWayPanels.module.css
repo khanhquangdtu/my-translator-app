@@ -86,16 +86,21 @@
 
 .arrow {
   font-size: 11px;
+  line-height: 1;
   color: var(--text-muted);
   flex: 0 0 auto;
 }
 
 .swapBtn {
   font-size: 14px;
+  line-height: 1;
   color: var(--accent);
   flex: 0 0 auto;
   padding: 2px 4px;
   border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .swapBtn:active {
