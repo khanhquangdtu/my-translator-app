@@ -864,12 +864,21 @@ export default function LiveScreen() {
               </Pill>
             </>
           ) : (
-            <Pill
-              caret
-              onPress={() => router.push('/language-picker?target=source')}
-              accessibilityLabel={`Language ${langPair}`}>
-              {langPair}
-            </Pill>
+            <>
+              <Pill
+                caret
+                onPress={() => router.push('/language-picker?target=source')}
+                accessibilityLabel="Source language">
+                {shortCode(prefs.sourceLanguage)}
+              </Pill>
+              <span className={styles.arrow}>→</span>
+              <Pill
+                caret
+                onPress={() => router.push('/language-picker?target=target')}
+                accessibilityLabel="Target language">
+                {shortCode(resolveLanguage(prefs.targetLanguage))}
+              </Pill>
+            </>
           )}
           <Pill caret onPress={toggleTwoWay} accessibilityLabel="Translation mode">
             {twoWay ? '↔ Two way' : '→ One way'}
