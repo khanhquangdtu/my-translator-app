@@ -9,6 +9,13 @@
  * language sent it to the panel of the person who did not say it, which is the
  * bug these tests exist to keep fixed.
  *
+ * The answer a translated token carries is `source_language`. `language` is the
+ * language its own text is written in — the other side of the pair — and the
+ * cases below fix which is read as what, because reading them the wrong way
+ * round does not fail loudly: it pairs the translation with a turn that was
+ * never waiting, while the turn that really was stays pending, its `dst` empty,
+ * and a panel skips a turn with no translation entirely.
+ *
  * The socket is never opened: `handleResponse` is fed frames directly, which is
  * the whole of the routing logic and the only part that needs a network to
  * exercise otherwise.
@@ -23,6 +30,7 @@ type SonioxToken = {
   is_final?: boolean;
   speaker?: string;
   language?: string;
+  source_language?: string;
   translation_status?: 'original' | 'translation' | 'none';
 };
 
@@ -48,43 +56,72 @@ function engineWith(config: EngineConfig) {
 const TWO_WAY: EngineConfig = { translationType: 'two_way', languageA: 'vi', languageB: 'en' };
 
 describe('two-way translation routing', () => {
-  it('credits a translation to the language it was spoken in, not the frame', () => {
+  it('takes the spoken language from source_language, not the frame', () => {
     const { feed, translations } = engineWith(TWO_WAY);
 
     // The English speaker's translation (written in Vietnamese) arrives in the
     // same frame as the Vietnamese speaker's first words.
     feed([
-      { text: 'Xin chào', is_final: true, language: 'vi', translation_status: 'original' },
-      { text: 'Hello there', is_final: true, language: 'vi', translation_status: 'translation' },
+      { text: 'Xin chao', is_final: true, language: 'vi', translation_status: 'original' },
+      {
+        text: 'Xin chao cac ban',
+        is_final: true,
+        language: 'vi',
+        source_language: 'en',
+        translation_status: 'translation',
+      },
     ]);
 
-    expect(translations).toEqual([['Hello there', 'en']]);
+    expect(translations).toEqual([['Xin chao cac ban', 'en']]);
   });
 
   it('splits a frame carrying both directions into two turns', () => {
     const { feed, translations } = engineWith(TWO_WAY);
 
     feed([
-      { text: 'Good morning', is_final: true, language: 'vi', translation_status: 'translation' },
-      { text: 'Chào buổi sáng', is_final: true, language: 'en', translation_status: 'translation' },
+      {
+        text: 'Good morning',
+        is_final: true,
+        language: 'en',
+        source_language: 'vi',
+        translation_status: 'translation',
+      },
+      {
+        text: 'Chao buoi sang',
+        is_final: true,
+        language: 'vi',
+        source_language: 'en',
+        translation_status: 'translation',
+      },
     ]);
 
     expect(translations).toEqual([
-      ['Good morning', 'en'],
-      ['Chào buổi sáng', 'vi'],
+      ['Good morning', 'vi'],
+      ['Chao buoi sang', 'en'],
     ]);
   });
 
-  it('refuses to guess when the translation is unlabelled', () => {
+  it('reads an unattributed token as written in the target language', () => {
+    const { feed, translations } = engineWith(TWO_WAY);
+
+    // Nothing but `language` to go on: a line written in B was said in A.
+    feed([
+      { text: 'Xin chao cac ban', is_final: true, language: 'vi', translation_status: 'translation' },
+    ]);
+
+    expect(translations).toEqual([['Xin chao cac ban', 'en']]);
+  });
+
+  it('refuses to guess when the translation says nothing at all', () => {
     const { feed, translations } = engineWith(TWO_WAY);
 
     feed([
-      { text: 'Xin chào', is_final: true, language: 'vi', translation_status: 'original' },
+      { text: 'Xin chao', is_final: true, language: 'vi', translation_status: 'original' },
       { text: 'Hello', is_final: true, translation_status: 'translation' },
     ]);
 
     // Null falls back to FIFO pairing, which is a guess the store makes
-    // knowingly — better than naming the wrong speaker with confidence.
+    // knowingly - better than naming the wrong speaker with confidence.
     expect(translations).toEqual([['Hello', null]]);
   });
 
@@ -92,10 +129,10 @@ describe('two-way translation routing', () => {
     const { feed, previews } = engineWith(TWO_WAY);
 
     feed([
-      { text: 'Hell', language: 'vi', translation_status: 'translation' },
+      { text: 'Xin ch', language: 'vi', source_language: 'en', translation_status: 'translation' },
     ]);
 
-    expect(previews).toEqual([['Hell', 'en']]);
+    expect(previews).toEqual([['Xin ch', 'en']]);
   });
 });
 
@@ -111,6 +148,8 @@ describe('one-way translation', () => {
       { text: 'Hello', is_final: true, language: 'en', translation_status: 'translation' },
     ]);
 
+    // No source_language and no A/B pair to flip through - the frame's own
+    // originals are the answer, because there is only one direction to be in.
     expect(translations).toEqual([['Hello', 'vi']]);
   });
 });

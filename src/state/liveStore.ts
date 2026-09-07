@@ -366,9 +366,29 @@ export const useLive = create<LiveState>()((set, get) => ({
     // the translation to a pending turn of the same source language so an
     // English→Vietnamese translation doesn't land on a Vietnamese turn (or
     // vice versa). Falls back to plain FIFO when the language is unknown.
-    const index = sourceLanguage
+    let index = sourceLanguage
       ? state.turns.findIndex((t) => t.pending && t.language === sourceLanguage)
       : state.turns.findIndex((t) => t.pending);
+
+    /*
+     * One turn waiting, and the language says it is not the one: believe the
+     * turn.
+     *
+     * The language on a translation is the engine's claim about a direction,
+     * and a wrong claim used to cost the line entirely — it paired with
+     * nothing, the turn that really was waiting kept an empty `dst`, and a
+     * two-way panel draws no turn without one. So the reader saw their own
+     * words recognised and then no translation at all, which is the failure
+     * that is impossible to diagnose from the screen.
+     *
+     * Only when a single turn is outstanding. With two or more there is a real
+     * choice to get wrong, and the language is the only thing that can tell
+     * them apart, so it stands.
+     */
+    if (index === -1 && sourceLanguage) {
+      const pending = state.turns.filter((t) => t.pending);
+      if (pending.length === 1) index = state.turns.indexOf(pending[0]);
+    }
 
     if (index === -1) {
       // Translation with no source waiting — Soniox sometimes leads with it.
