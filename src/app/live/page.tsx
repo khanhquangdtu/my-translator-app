@@ -547,7 +547,10 @@ export default function LiveScreen() {
       const blocks: Block[] = [];
 
       for (const t of own) {
-        const text = t.dst || t.src;
+        // Two-way panels exist so each reader sees the OTHER language. Show
+        // only the translation; falling back to the source would put the
+        // wrong language in the panel and confuse the reader.
+        const text = t.dst;
         if (!text) continue;
         const prev = blocks[blocks.length - 1];
 
@@ -597,11 +600,10 @@ export default function LiveScreen() {
           state: (i < 2 ? 'final' : 'old') as 'live' | 'final' | 'old',
         }));
 
-      if (provisional?.text && provisional.language === lang) {
-        // Finalised blocks above show `t.dst || t.src`, so the in-flight line
-        // follows the same rule: the running translation when there is one,
-        // the source until the first translated token lands.
-        const liveText = provisionalDst || provisional.text;
+      if (provisional?.text && provisional.language === lang && provisionalDst) {
+        // Only show the in-flight line once a translation preview exists,
+        // matching the finalised-turn rule of showing only `dst`.
+        const liveText = provisionalDst;
         // Append to the newest block if same speaker is still talking
         const head = lines[0];
         const headSpeaker = blocks.length > 0 ? blocks[blocks.length - 1].speaker : null;
