@@ -530,7 +530,7 @@ export default function LiveScreen() {
       viewMode: 'panels',
       translationType: 'two_way',
       languageA: resolveLanguage(languageA),
-      languageB,
+      languageB: resolveLanguage(languageB),
     });
   }, [
     twoWay,
