@@ -1,5 +1,5 @@
 /*
- * The control strip: one 48 px button plus the same inset above and below it.
+ * The control strip: one 40 px button plus the same inset above and below it.
  * Declared here because four rules below have to agree on it — the padding
  * that reserves the strip and the offset that sits the buttons inside it, once
  * each for upright and rotated. Change the button size and only these two
@@ -7,7 +7,7 @@
  */
 .panels {
   --control-inset: 10px;
-  --control-strip: 68px;
+  --control-strip: 60px;
 
   flex: 1;
   min-height: 0;
@@ -59,7 +59,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 16px 0;
+  padding: 10px 16px;
   margin-bottom: 10px;
 }
 
@@ -182,12 +182,7 @@
 }
 
 /*
- * Upright the bar spans the full width, because it holds the two panel headers
- * as well as the buttons. Three flex cells — header, buttons, header — with the
- * headers taking the slack, so they centre over their own half without ever
- * reaching the buttons. Centring each header over its panel independently is
- * what collides: the buttons are 288 px wide, so anything under about 764 px of
- * viewport overlapped them.
+ * Upright the bar holds only the control buttons, centered horizontally.
  */
 .controlsUpright {
   top: var(--control-inset);
@@ -195,6 +190,18 @@
   right: 0;
   flex-direction: row;
   align-items: center;
+  justify-content: center;
+}
+
+.controlsWithHeading {
+  justify-content: flex-start;
+}
+
+.headInBar {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  margin-bottom: 0;
 }
 
 .controlButtons {
@@ -204,14 +211,6 @@
   gap: 12px;
 }
 
-.headInBar {
-  flex: 1;
-  min-width: 0;
-  /* The band already spaces the bar; the panel version's own padding would
-     push the pills out of line with the buttons beside them. */
-  padding: 0;
-  margin-bottom: 0;
-}
 
 .controlsRotated {
   top: var(--control-inset);
@@ -219,25 +218,21 @@
   right: 0;
   flex-direction: row;
   align-items: center;
+  justify-content: center;
 }
 
-/*
- * A row in local coords becomes a vertical strip on the portrait screen after
- * the container's 90° rotation, and reads left-to-right when the phone is
- * held sideways — matching the upright layout order.
- */
-.controlsRotated .controlButtons {
-  flex-direction: row;
+.controlsRotated.controlsWithHeading {
+  justify-content: flex-start;
 }
 
 .controlBtn {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: var(--text-primary);
-  font-size: 20px;
+  font-size: 18px;
   display: flex;
   align-items: center;
   justify-content: center;

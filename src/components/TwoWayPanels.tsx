@@ -112,6 +112,10 @@ export function TwoWayPanels({
     };
   };
 
+  // Heading labels are in control bar when they're same orientation as buttons (rotation % 2 === 0)
+  // Otherwise they're inside the rotated panels (rotation % 2 === 1)
+  const headingInBar = rotation % 2 === 0;
+
   return (
     <div
       className={cx(styles.panels, rotated ? styles.panelsRotated : styles.panelsUpright)}
@@ -122,6 +126,7 @@ export function TwoWayPanels({
           ref={index === 0 ? slotRef : undefined}
           className={cx(styles.slot, index > 0 && styles.slotDivider)}>
           <div style={contentStyle(index)}>
+            {!headingInBar && <PanelHead panel={panel} />}
             <div className={cx(styles.lines, 'noscrollbar')}>
               {panel.lines.map((line) => (
                 <span
@@ -149,9 +154,10 @@ export function TwoWayPanels({
         <div
           className={cx(
             styles.controls,
-            rotated ? styles.controlsRotated : styles.controlsUpright
+            rotated ? styles.controlsRotated : styles.controlsUpright,
+            headingInBar && styles.controlsWithHeading
           )}>
-          <PanelHead panel={panels[0]} className={styles.headInBar} />
+          {headingInBar && <PanelHead panel={panels[0]} className={styles.headInBar} />}
           <div className={styles.controlButtons}>
           {onStop && (
             <button
@@ -199,7 +205,7 @@ export function TwoWayPanels({
             </button>
           )}
           </div>
-          <PanelHead panel={panels[1]} className={styles.headInBar} />
+          {headingInBar && <PanelHead panel={panels[1]} className={styles.headInBar} />}
         </div>
       )}
     </div>
