@@ -15,6 +15,7 @@ export default function TranslationSettings() {
   const router = useRouter();
   const prefs = useSettings((s) => s.prefs);
   const setPref = useSettings((s) => s.set);
+  const merge = useSettings((s) => s.merge);
 
   const speakerOrder = useLive((s) => s.speakerOrder);
   const speakerNames = useLive((s) => s.speakerNames);
@@ -40,7 +41,12 @@ export default function TranslationSettings() {
           label="Translation type"
           value={twoWay ? 'Two-way' : 'One-way'}
           chevron
-          onPress={() => setPref('translationType', twoWay ? 'one_way' : 'two_way')}
+          onPress={() =>
+            merge({
+              translationType: twoWay ? 'one_way' : 'two_way',
+              viewMode: twoWay ? 'stream' : 'panels',
+            })
+          }
         />
         {twoWay ? (
           <>

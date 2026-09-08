@@ -15,6 +15,7 @@ export default function DisplaySettings() {
   const router = useRouter();
   const prefs = useSettings((s) => s.prefs);
   const setPref = useSettings((s) => s.set);
+  const merge = useSettings((s) => s.merge);
 
   return (
     <Screen>
@@ -60,7 +61,12 @@ export default function DisplaySettings() {
           }
           value={prefs.viewMode === 'panels' ? 'Panels' : 'Stream'}
           chevron
-          onPress={() => setPref('viewMode', prefs.viewMode === 'panels' ? 'stream' : 'panels')}
+          onPress={() =>
+            merge({
+              viewMode: prefs.viewMode === 'panels' ? 'stream' : 'panels',
+              translationType: prefs.viewMode === 'panels' ? 'one_way' : 'two_way',
+            })
+          }
         />
         <Row
           label="Max lines kept"
