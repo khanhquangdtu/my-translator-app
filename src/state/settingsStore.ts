@@ -85,9 +85,9 @@ export function resolveLanguage(code: string): string {
 const DEFAULTS: Prefs = {
   sourceLanguage: AUTO,
   targetLanguage: AUTO,
-  translationType: 'one_way',
-  languageA: AUTO,
-  languageB: 'en',
+  translationType: 'two_way',
+  languageA: 'en',
+  languageB: 'vi',
   languageHintsStrict: false,
   /*
    * The bottom of the range the Translation screen offers, not the middle.
@@ -113,7 +113,7 @@ const DEFAULTS: Prefs = {
    * the saved transcript either way.
    */
   maxLinesKept: 100,
-  viewMode: 'stream',
+  viewMode: 'panels',
 
   speakerDetection: true,
   showSpeakerChip: true,

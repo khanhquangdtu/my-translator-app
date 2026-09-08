@@ -289,6 +289,13 @@ export class SonioxEngine implements TranslationEngine {
     config: EngineConfig,
     carryoverContext: string | null
   ) {
+    console.log('[soniox config]', {
+      translationType: config.translationType,
+      languageA: config.languageA,
+      languageB: config.languageB,
+      sourceLanguage: config.sourceLanguage,
+      targetLanguage: config.targetLanguage,
+    });
     const msg: Record<string, unknown> = {
       api_key: apiKey,
       model: 'stt-rt-v5',
