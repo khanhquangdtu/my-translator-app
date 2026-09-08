@@ -522,7 +522,16 @@ export default function LiveScreen() {
         prefs.recentLanguages.find((c) => resolveLanguage(c) !== resolveLanguage(languageA)) ??
         (resolveLanguage(languageA) === 'en' ? 'vi' : 'en');
     }
-    merge({ viewMode: 'panels', translationType: 'two_way', languageA, languageB });
+    // Both languageA and languageB must be resolved so they match Soniox's
+    // response tokens exactly. If either is 'auto', Soniox won't recognise
+    // the language comparison in spokenLanguageOf, and translations will fall
+    // back to empty-string keying, leaving them unpaired.
+    merge({
+      viewMode: 'panels',
+      translationType: 'two_way',
+      languageA: resolveLanguage(languageA),
+      languageB,
+    });
   }, [
     twoWay,
     prefs.sourceLanguage,
