@@ -290,11 +290,8 @@ export class SonioxEngine implements TranslationEngine {
     carryoverContext: string | null
   ) {
     console.log('[soniox config]', {
-      translationType: config.translationType,
       languageA: config.languageA,
       languageB: config.languageB,
-      sourceLanguage: config.sourceLanguage,
-      targetLanguage: config.targetLanguage,
     });
     const msg: Record<string, unknown> = {
       api_key: apiKey,
@@ -310,23 +307,18 @@ export class SonioxEngine implements TranslationEngine {
       enable_language_identification: true,
     };
 
-    if (config.sourceLanguage && config.sourceLanguage !== 'auto') {
-      msg.language_hints = [config.sourceLanguage];
-    }
     if (config.languageHintsStrict) {
       msg.language_hints_strict = true;
     }
 
-    if (config.translationType === 'two_way' && config.languageA && config.languageB) {
+    if (config.languageA && config.languageB) {
       msg.translation = {
         type: 'two_way',
         language_a: config.languageA,
         language_b: config.languageB,
       };
-      // two-way needs both sides hinted, overriding any single source hint
+      // Both sides hinted: either one of them can be the language being spoken.
       msg.language_hints = [config.languageA, config.languageB];
-    } else if (config.targetLanguage) {
-      msg.translation = { type: 'one_way', target_language: config.targetLanguage };
     }
 
     const context = this.buildContext(config.customContext ?? null, carryoverContext);
@@ -437,13 +429,14 @@ export class SonioxEngine implements TranslationEngine {
      *
      * A single frame routinely carries the translation of the utterance that
      * just ended alongside the first original tokens of the one that has
-     * already started — and in two-way mode those two are in opposite
-     * directions. Concatenating them, then labelling the result with whatever
-     * language the last original token happened to be in, is what sent a
-     * translation to the panel of the person who did not say it.
+     * already started — and those two are in opposite directions. Concatenating
+     * them, then labelling the result with whatever language the last original
+     * token happened to be in, is what sent a translation to the panel of the
+     * person who did not say it.
      *
      * Keyed by the empty string when the token says nothing about where it came
-     * from; `translationSource` decides what that means.
+     * from, which is reported as a null source: an unattributed line pairs by
+     * arrival order rather than being assigned to a panel on no evidence.
      */
     const finalTranslations = new Map<string, string>();
     let provisionalTranslation = '';
@@ -498,7 +491,14 @@ export class SonioxEngine implements TranslationEngine {
     for (const [from, text] of finalTranslations) {
       if (!text.trim()) continue;
       anyTranslation = true;
-      this.onTranslation?.(text, this.translationSource(from, language));
+      /*
+       * `from` or nothing — never the frame's own original language.
+       *
+       * Both directions are live at once, so naming one of them on no evidence
+       * is how a translation ends up in the other speaker's panel. Null instead,
+       * which leaves the store to pair by arrival order.
+       */
+      this.onTranslation?.(text, from || null);
       this.addToHistory(text);
     }
 
@@ -515,10 +515,7 @@ export class SonioxEngine implements TranslationEngine {
     // reader actually looks at — before it, the translation could not appear
     // until Soniox had decided the utterance was over.
     if (provisionalTranslation.trim()) {
-      this.onProvisionalTranslation?.(
-        provisionalTranslation,
-        this.translationSource(provisionalTranslationFrom, language)
-      );
+      this.onProvisionalTranslation?.(provisionalTranslation, provisionalTranslationFrom || null);
     } else if (anyTranslation || hasEnd) {
       this.onProvisionalTranslation?.('', null);
     }
@@ -542,30 +539,11 @@ export class SonioxEngine implements TranslationEngine {
     if (token.source_language) return token.source_language;
 
     const config = this.config;
-    if (
-      config?.translationType === 'two_way' &&
-      config.languageA &&
-      config.languageB &&
-      token.language
-    ) {
+    if (config?.languageA && config.languageB && token.language) {
       if (token.language === config.languageB) return config.languageA;
       if (token.language === config.languageA) return config.languageB;
     }
     return null;
-  }
-
-  /**
-   * What to report when the tokens themselves gave nothing away.
-   *
-   * One-way has a single direction, so the language of the originals in the
-   * same frame is the right answer and always has been. Two-way has two, and
-   * naming one of them on no evidence is how a translation ends up in the other
-   * speaker's panel — null instead, which leaves the store to pair by arrival
-   * order.
-   */
-  private translationSource(from: string, frameLanguage: string | null): string | null {
-    if (from) return from;
-    return this.config?.translationType === 'two_way' ? null : frameLanguage;
   }
 
   // ─── Session lifecycle ───────────────────────────────────────────────

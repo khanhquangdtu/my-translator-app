@@ -3,13 +3,16 @@
  *
  * There is no tab bar: Live is the root screen and every other destination is a
  * full-screen push from the app bar or the ⋯ sheet, which is what keeps the
- * 62pt a tab bar would have eaten for the transcript. And there is no split
- * pane: one stream, newest turn at the top, translation over source, so the
- * newest line lands in the same place every time and the eye never has to hunt
- * for it.
+ * 62pt a tab bar would have eaten for the transcript.
  *
- * Four states share this screen — Idle, Listening, Degraded, and (in landscape)
- * Table mode.
+ * Two states share this screen, and the split between them is `running`:
+ *
+ *  - **Listening** is the two-way panels, full screen, landscape-locked — one
+ *    column per language, each showing what the other side said. Translation
+ *    only ever runs both ways, so this is the only shape a live session has.
+ *  - **Idle** is everything else: the language pills, the stream of the session
+ *    that just ended (newest turn at the top, translation over source), Start,
+ *    and the routes out to Library and Settings.
  *
  * Ported from the Expo screen. The only substantive rewrite is the list: a
  * `FlatList` with `maintainVisibleContentPosition` becomes a plain scroller
@@ -35,7 +38,6 @@ import {
   IconBtn,
   Pill,
   StatusDot,
-  type DotTone,
 } from '@/components/primitives';
 import { PromptDialog } from '@/components/PromptDialog';
 import { SaveDialog } from '@/components/SaveDialog';
@@ -45,26 +47,18 @@ import { TwoWayPanels, type TwoWayPanelData } from '@/components/TwoWayPanels';
 import { NewestDivider, TurnView, type TurnLine, type TurnState } from '@/components/Turn';
 import { shortCode } from '@/data/languages';
 import type { Segment } from '@/lib/sessions/format';
-import { useWindowSize } from '@/hooks/useWindowSize';
 import { hasOpenAIKey } from '@/lib/config/capabilities';
 import { MOCK_ENABLED } from '@/lib/engine/mock';
 import { readSegmentRange } from '@/lib/sessions/history';
 import { nextPage, splitWindow } from '@/lib/sessions/window';
 import { copyToClipboard, lockLandscape, unlockOrientation } from '@/lib/platform';
-import { estimateCost, speakerDisplayName, useLive, type Turn } from '@/state/liveStore';
+import { speakerDisplayName, useLive, type Turn } from '@/state/liveStore';
 import { resolveLanguage, useSettings } from '@/state/settingsStore';
 import { generateInBackground } from '@/state/summaryStore';
 import { useSession } from '@/state/useSession';
 import { MAX_TRANSCRIPT_SIZE, MIN_TRANSCRIPT_SIZE } from '@/theme/tokens';
 
 import styles from './live.module.css';
-
-/** How long the mic must stay quiet before we suggest moving the phone. */
-const QUIET_GRACE_SEC = 8;
-/** Table mode hides its chrome this long after the last tap. */
-const CHROME_TIMEOUT_SEC = 3;
-/** …and dims entirely after this long without interaction. */
-const DIM_TIMEOUT_SEC = 60;
 
 /**
  * A pause longer than this ends the run. Soniox emits one turn per recognised
@@ -127,7 +121,6 @@ type ListItem = {
 
 export default function LiveScreen() {
   const router = useRouter();
-  const { landscape } = useWindowSize();
 
   const prefs = useSettings((s) => s.prefs);
   const setPref = useSettings((s) => s.set);
@@ -135,7 +128,6 @@ export default function LiveScreen() {
   const summaryAvailable = hasOpenAIKey();
 
   const running = useLive((s) => s.running);
-  const status = useLive((s) => s.status);
   const turns = useLive((s) => s.turns);
   const droppedSegments = useLive((s) => s.droppedSegments);
   const sessionId = useLive((s) => s.sessionId);
@@ -143,10 +135,7 @@ export default function LiveScreen() {
   const provisionalDst = useLive((s) => s.provisionalDst);
   const provisionalDstLang = useLive((s) => s.provisionalDstLang);
   const error = useLive((s) => s.error);
-  const reconnectAttempt = useLive((s) => s.reconnectAttempt);
-  const reconnectMax = useLive((s) => s.reconnectMax);
   const elapsedSec = useLive((s) => s.elapsedSec);
-  const lastLoudAtSec = useLive((s) => s.lastLoudAtSec);
   const speakerNames = useLive((s) => s.speakerNames);
   const speakerOrder = useLive((s) => s.speakerOrder);
   const turnCounts = useLive((s) => s.turnCounts);
@@ -180,8 +169,6 @@ export default function LiveScreen() {
    * start anyway so it doesn't carry between sessions.
    */
   const [revealedIds, setRevealedIds] = useState<ReadonlySet<number>>(() => new Set<number>());
-  const lastInteractionSec = useLive((s) => s.lastInteractionSec);
-  const noteInteraction = useLive((s) => s.noteInteraction);
 
   const listRef = useRef<HTMLDivElement>(null);
   /** Scroll height at the last commit, for the prepend compensation below. */
@@ -190,26 +177,6 @@ export default function LiveScreen() {
   const wasFollowing = useRef(true);
   /** "Following" = pinned to the newest line. */
   const [following, setFollowing] = useState(true);
-
-  // Both the quiet warning and the table-mode chrome are DERIVED from the
-  // once-a-second session tick rather than held in effect-driven state. That
-  // keeps them honest (no stale flags after a stop/start) and avoids the
-  // cascading re-renders a setState-inside-an-effect would cause.
-  const quiet = running && elapsedSec - lastLoudAtSec > QUIET_GRACE_SEC;
-
-  const sinceTap = elapsedSec - lastInteractionSec;
-  const chromeVisible =
-    !landscape || !running || !prefs.autoHideControls || sinceTap < CHROME_TIMEOUT_SEC;
-  const dimmed = landscape && running && prefs.dimInTableMode && sinceTap >= DIM_TIMEOUT_SEC;
-
-  const wakeChrome = noteInteraction;
-
-  // Rotating into table mode counts as an interaction, so the chrome starts
-  // visible and then fades — rather than appearing pre-hidden and dimmed
-  // because the session clock has been running for a while.
-  useEffect(() => {
-    if (landscape) noteInteraction();
-  }, [landscape, noteInteraction]);
 
   /*
    * "View more" pages backwards past the live window.
@@ -474,84 +441,35 @@ export default function LiveScreen() {
   );
 
   // ── derived chrome ─────────────────────────────────────────────────
-  const reconnecting = status === 'connecting' && reconnectAttempt > 0;
-  const statusTitle = !running
-    ? 'Ready'
-    : reconnecting
-      ? 'Reconnecting'
-      : status === 'connecting'
-        ? 'Connecting'
-        : status === 'error'
-          ? 'Error'
-          : 'Listening';
-
-  const dotTone: DotTone = !running
-    ? 'idle'
-    : status === 'error'
-      ? 'error'
-      : reconnecting || status === 'connecting'
-        ? 'warn'
-        : 'live';
-
-  const twoWay = prefs.viewMode === 'panels';
   const resolvedA = resolveLanguage(prefs.languageA);
   const resolvedB = resolveLanguage(prefs.languageB);
 
-  const toggleTwoWay = useCallback(() => {
-    setOverflowOpen(false);
-    if (twoWay) {
-      merge({ viewMode: 'stream', translationType: 'one_way' });
-      return;
-    }
-    /*
-     * Seed the pair from the one-way languages — but never as X ↔ X. With
-     * both sides on AUTO (the default) source and target resolve to the same
-     * device language, and a same-language pair gives Soniox nothing to
-     * translate: the panels came up silent with two identical headers. Fall
-     * back to the stored pair, and past that to English against a recently
-     * used language, so the toggle always lands on a pair that translates.
-     */
-    let languageA = prefs.sourceLanguage;
-    let languageB = resolveLanguage(prefs.targetLanguage);
-    if (resolveLanguage(languageA) === languageB) {
-      languageA = prefs.languageA;
-      languageB = prefs.languageB;
-    }
-    if (resolveLanguage(languageA) === resolveLanguage(languageB)) {
-      languageB =
-        prefs.recentLanguages.find((c) => resolveLanguage(c) !== resolveLanguage(languageA)) ??
-        (resolveLanguage(languageA) === 'en' ? 'vi' : 'en');
-    }
-    // Both languageA and languageB must be resolved so they match Soniox's
-    // response tokens exactly. If either is 'auto', Soniox won't recognise
-    // the language comparison in spokenLanguageOf, and translations will fall
-    // back to empty-string keying, leaving them unpaired.
-    merge({
-      viewMode: 'panels',
-      translationType: 'two_way',
-      languageA: resolveLanguage(languageA),
-      languageB: resolveLanguage(languageB),
-    });
-  }, [
-    twoWay,
-    prefs.sourceLanguage,
-    prefs.targetLanguage,
-    prefs.languageA,
-    prefs.languageB,
-    prefs.recentLanguages,
-    merge,
-  ]);
-
-  // Two-way forces landscape so each panel gets enough width.
+  /*
+   * A pair that is X ↔ X gives Soniox nothing to translate: the panels come up
+   * silent under two identical headers. It is reachable whenever both sides
+   * resolve the same way — picking A to match B, or an 'auto' left over from a
+   * build that still had a source/target pair — so repair it rather than
+   * running a session that cannot produce a line.
+   *
+   * Resolved codes both times: they are compared verbatim against what Soniox
+   * labels its tokens with, so an unresolved 'auto' pairs with nothing.
+   */
   useEffect(() => {
-    if (twoWay && running) void lockLandscape();
+    if (running || resolvedA !== resolvedB) return;
+    const languageB =
+      prefs.recentLanguages.map(resolveLanguage).find((c) => c !== resolvedA) ??
+      (resolvedA === 'en' ? 'vi' : 'en');
+    merge({ languageA: resolvedA, languageB });
+  }, [running, resolvedA, resolvedB, prefs.recentLanguages, merge]);
+
+  // Panels are landscape-locked so each column gets enough width.
+  useEffect(() => {
+    if (running) void lockLandscape();
     else void unlockOrientation();
     return () => { void unlockOrientation(); };
-  }, [twoWay, running]);
+  }, [running]);
 
-  const twoWayPanelData = useMemo<[TwoWayPanelData, TwoWayPanelData] | null>(() => {
-    if (!twoWay) return null;
-
+  const twoWayPanelData = useMemo<[TwoWayPanelData, TwoWayPanelData]>(() => {
     // Position of each turn in `turns`, built once per recompute.
     //
     // The interruption check below needs to know where two turns sit relative
@@ -679,7 +597,6 @@ export default function LiveScreen() {
       make(1, resolvedB, resolvedA, 'b', 'a'),
     ] as [TwoWayPanelData, TwoWayPanelData];
   }, [
-    twoWay,
     turns,
     provisional,
     provisionalDst,
@@ -691,13 +608,9 @@ export default function LiveScreen() {
     panelSwap,
   ]);
 
-  // Source keeps 'AUTO' — that is a real mode (Soniox detects it). The target
-  // never is: 'auto' means "follow the device", so show what it actually
-  // resolves to rather than a second, meaningless AUTO.
-  const langPair = `${shortCode(prefs.sourceLanguage)} → ${shortCode(resolveLanguage(prefs.targetLanguage))}`;
-  const displayPair = twoWay
-    ? `${shortCode(resolvedA)} ↔ ${shortCode(resolvedB)}`
-    : langPair;
+  // Always the resolved codes: 'auto' means "follow the device", and a header
+  // reading AUTO says nothing about which language the panel below it is in.
+  const displayPair = `${shortCode(resolvedA)} ↔ ${shortCode(resolvedB)}`;
   const saveSubtitle = [
     `${Math.max(1, Math.round(elapsedSec / 60))} minutes`,
     `${turns.length} turns`,
@@ -796,10 +709,11 @@ export default function LiveScreen() {
     </div>
   );
 
-  // ── Two-way fullscreen ─────────────────────────────────────────────
-  // Own early return so nothing else (strip, action bar) renders beneath
-  // the rotated container. Stop + Rotate controls live inside the panels.
-  if (twoWay && running && twoWayPanelData) {
+  // ── Listening: the two-way panels ──────────────────────────────────
+  // Own early return so nothing else (strip, action bar) renders beneath the
+  // rotated container. Stop + Rotate controls live inside the panels, which is
+  // the whole of the chrome a running session has.
+  if (running) {
     const displayedPanels: [TwoWayPanelData, TwoWayPanelData] = panelsReversed
       ? [twoWayPanelData[1], twoWayPanelData[0]]
       : twoWayPanelData;
@@ -827,36 +741,7 @@ export default function LiveScreen() {
     );
   }
 
-  // ── Table mode (landscape) ─────────────────────────────────────────
-  if (landscape && running) {
-    // A pointer listener on the container, not a button wrapper: the transcript
-    // scrolls, and wrapping it in something clickable would fight that. A raw
-    // pointerdown bubbles from anywhere in the subtree, which is exactly the
-    // "any touch wakes the chrome" behaviour this needs.
-    return (
-      <Screen>
-        <div
-          className={cx(styles.tableMode, dimmed && styles.dimmed)}
-          onPointerDown={wakeChrome}>
-          {chromeVisible ? (
-            <div className={styles.landTop}>
-              <StatusDot tone={dotTone} pulse={running} />
-              <span className={styles.landTopText}>
-                {displayPair}
-                {speakerCount > 0 ? ` · ${speakerCount} speakers` : ''}
-              </span>
-              <span className={cx(styles.landTopText, styles.tabular)}>
-                {formatElapsed(elapsedSec)} · ${estimateCost(elapsedSec).toFixed(2)}
-              </span>
-            </div>
-          ) : null}
-          {transcript}
-        </div>
-      </Screen>
-    );
-  }
-
-  // ── Portrait ───────────────────────────────────────────────────────
+  // ── Idle: the stream, and everything that is not the session ───────
   return (
     <Screen>
       <AppBar>
@@ -865,21 +750,14 @@ export default function LiveScreen() {
           accessibilityLabel="Session library"
           onPress={() => router.push('/library')}
         />
-        <StatusDot tone={dotTone} pulse={running} />
-        <AppBarTitle muted={!running}>{statusTitle}</AppBarTitle>
+        <StatusDot tone="idle" />
+        <AppBarTitle muted>Ready</AppBarTitle>
         <InstallButton />
-        {running ? (
-          <span className={styles.meterLine}>
-            <span className={styles.meterStrong}>{formatElapsed(elapsedSec)}</span>
-            {` · $${estimateCost(elapsedSec).toFixed(2)}`}
-          </span>
-        ) : (
-          <AppBarIcon
-            glyph={(tint) => <SettingsIcon color={tint} />}
-            accessibilityLabel="Settings"
-            onPress={() => router.push('/settings')}
-          />
-        )}
+        <AppBarIcon
+          glyph={(tint) => <SettingsIcon color={tint} />}
+          accessibilityLabel="Settings"
+          onPress={() => router.push('/settings')}
+        />
         <AppBarIcon
           glyph="☰"
           accessibilityLabel="More options"
@@ -888,67 +766,26 @@ export default function LiveScreen() {
         />
       </AppBar>
 
-      {!running ? (
-        <div className={styles.pills}>
-          {twoWay ? (
-            <>
-              <Pill
-                caret
-                onPress={() => router.push('/language-picker?target=a')}
-                accessibilityLabel="Language A">
-                {shortCode(resolvedA)}
-              </Pill>
-              <Pill
-                caret
-                onPress={() => router.push('/language-picker?target=b')}
-                accessibilityLabel="Language B">
-                {shortCode(resolvedB)}
-              </Pill>
-            </>
-          ) : (
-            <>
-              <Pill
-                caret
-                onPress={() => router.push('/language-picker?target=source')}
-                accessibilityLabel="Source language">
-                {shortCode(prefs.sourceLanguage)}
-              </Pill>
-              <span className={styles.arrow}>→</span>
-              <Pill
-                caret
-                onPress={() => router.push('/language-picker?target=target')}
-                accessibilityLabel="Target language">
-                {shortCode(resolveLanguage(prefs.targetLanguage))}
-              </Pill>
-            </>
-          )}
-          <Pill caret onPress={toggleTwoWay} accessibilityLabel="Translation mode">
-            {twoWay ? '↔ Two way' : '→ One way'}
-          </Pill>
-        </div>
-      ) : null}
+      <div className={styles.pills}>
+        <Pill
+          caret
+          onPress={() => router.push('/language-picker?target=a')}
+          accessibilityLabel="Language A">
+          {shortCode(resolvedA)}
+        </Pill>
+        {/* Both ways, always: each side reads the other. */}
+        <span className={styles.arrow}>↔</span>
+        <Pill
+          caret
+          onPress={() => router.push('/language-picker?target=b')}
+          accessibilityLabel="Language B">
+          {shortCode(resolvedB)}
+        </Pill>
+      </div>
 
-      {error ? (
-        <Banner
-          tone={reconnecting ? 'warn' : 'error'}
-          glyph="⚠"
-          text={
-            reconnecting
-              ? `Connection dropped — retrying (${reconnectAttempt}/${reconnectMax})`
-              : error
-          }
-        />
-      ) : null}
-
-      {running && quiet ? (
-        <Banner
-          tone="warnSoft"
-          glyph="🎙"
-          text="Barely hearing anything. Move closer?"
-          action="How?"
-          onAction={() => router.push('/onboarding/1')}
-        />
-      ) : null}
+      {/* What is left of the session that just ended — the panels carry no
+          chrome of their own, so an error only becomes readable back here. */}
+      {error ? <Banner tone="error" glyph="⚠" text={error} /> : null}
 
       {Object.entries(suggestedNames).map(([id, suggestion]) => (
         <Banner
@@ -963,63 +800,39 @@ export default function LiveScreen() {
 
       {items.length === 0 ? (
         <div className={styles.center}>
-          <IdleWave active={running} />
-          <span className={styles.idleTitle}>{running ? 'Listening…' : 'Tap Start to listen'}</span>
-          {!running ? (
-            <p className={styles.hint}>
-              Put your phone near the speaker
-              <br />
-              <button
-                type="button"
-                className={styles.hintLink}
-                onClick={() => router.push('/onboarding/1')}>
-                How? →
-              </button>
-            </p>
-          ) : null}
+          <IdleWave active={false} />
+          <span className={styles.idleTitle}>Tap Start to listen</span>
+          <p className={styles.hint}>
+            Put your phone near the speaker
+            <br />
+            <button
+              type="button"
+              className={styles.hintLink}
+              onClick={() => router.push('/onboarding/1')}>
+              How? →
+            </button>
+          </p>
         </div>
       ) : (
         transcript
       )}
 
-      {running && error && !reconnecting ? (
+      {error ? (
         <p className={styles.reassurance}>Nothing is lost — your transcript is already saved.</p>
       ) : null}
 
       <div className={styles.strip}>
         <LevelMeter />
-        <span className={styles.stripText}>
-          {running
-            ? `${displayPair}${speakerCount > 0 ? ` · ${speakerCount} speakers` : ''}`
-            : 'Mic level — quiet'}
-        </span>
+        <span className={styles.stripText}>Mic level — quiet</span>
       </div>
 
       <ActionBar>
-        {running && error && !reconnecting ? (
-          <>
-            <Cta label="Save & end" variant="ghost" flex={1} onPress={onStop} />
-            <Cta label="Retry now" flex={1} onPress={() => void session.retry()} />
-          </>
-        ) : running ? (
-          <>
-            <Cta label="■  Stop" variant="stop" flex={1} onPress={onStop} />
-            <IconBtn
-              glyph="⋯"
-              accessibilityLabel="More options"
-              onPress={() => setOverflowOpen(true)}
-            />
-          </>
-        ) : (
-          <>
-            <Cta label="▶  Start" flex={1} onPress={onStart} />
-            <IconBtn
-              glyph="A⁺"
-              accessibilityLabel={`Text size ${prefs.fontSize}px — tap to increase`}
-              onPress={() => adjustFont(4)}
-            />
-          </>
-        )}
+        <Cta label="▶  Start" flex={1} onPress={onStart} />
+        <IconBtn
+          glyph="A⁺"
+          accessibilityLabel={`Text size ${prefs.fontSize}px — tap to increase`}
+          onPress={() => adjustFont(4)}
+        />
       </ActionBar>
 
       {MOCK_ENABLED ? <span className={styles.mockBadge}>MOCK ENGINE</span> : null}
@@ -1046,12 +859,6 @@ export default function LiveScreen() {
         />
         <SheetSeparator />
         <SheetGroup>This session</SheetGroup>
-        <SheetItem
-          glyph="↔"
-          label="Mode"
-          meta={twoWay ? 'Two way' : 'One way'}
-          onPress={toggleTwoWay}
-        />
         <SheetItem
           glyph="A"
           label="Text size"
@@ -1118,10 +925,4 @@ export default function LiveScreen() {
       />
     </Screen>
   );
-}
-
-function formatElapsed(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }

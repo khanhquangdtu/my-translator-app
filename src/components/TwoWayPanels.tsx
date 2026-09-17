@@ -1,9 +1,10 @@
 /**
  * Two-way panels — one column per translation direction, newest at the top.
  *
- * Used when `translationType === 'two_way'`: two 50/50 columns, each showing
- * turns spoken in one language translated into the other. Each header has
- * tappable language buttons so the user can change A/B from the panel itself.
+ * The whole of the Live screen while a session runs: two 50/50 columns, each
+ * showing turns spoken in one language translated into the other. Each header
+ * has tappable language buttons so the user can change A/B from the panel
+ * itself, mid-session.
  *
  * In portrait the whole container rotates 90° so the panels are always
  * side-by-side in landscape orientation. Individual panels rotate in opposite

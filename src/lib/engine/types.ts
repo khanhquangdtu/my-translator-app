@@ -11,8 +11,6 @@
 
 export type EngineStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
-export type TranslationType = 'one_way' | 'two_way';
-
 /** Soniox `context` object — improves both transcription and translation. */
 export type CustomContext = {
   /** free-form key/value pairs: domain, topic, participants… */
@@ -33,14 +31,15 @@ export type EngineConfig = {
    * take a caller-supplied key still has a slot for it.
    */
   apiKey?: string;
-  /** BCP-47-ish code, or 'auto' */
-  sourceLanguage?: string;
-  targetLanguage?: string;
-  translationType?: TranslationType;
-  /** two-way only */
+  /**
+   * The conversation pair. Translation is always two-way: speech in A comes
+   * back in B and vice versa, so both sides must be concrete BCP-47-ish codes —
+   * never 'auto'. The codes are compared verbatim against what Soniox labels
+   * its tokens with, and an unresolved 'auto' matches nothing.
+   */
   languageA?: string;
   languageB?: string;
-  /** reject speech outside the hinted language instead of guessing */
+  /** reject speech outside the hinted languages instead of guessing */
   languageHintsStrict?: boolean;
   /** how long a pause must be before a turn is finalised, ms */
   endpointDelay?: number;

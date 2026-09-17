@@ -274,7 +274,7 @@ function SessionRow({
         <div className={styles.meta}>
           <span className={styles.metaDot} />
           <span className={styles.metaText}>
-            {`${shortCode(item.source_lang)} → ${shortCode(item.target_lang)}`}
+            {`${shortCode(item.source_lang)} ↔ ${shortCode(item.target_lang)}`}
             {` · ${formatDuration(item.duration_sec)}`}
             {item.speaker_count > 0 ? ` · ${item.speaker_count} speakers` : ''}
             {` · ${relativeTime(item.created_at)}`}

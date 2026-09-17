@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 
 import { ChevronLeftIcon } from '@/components/icons';
-import { AppBar, AppBarIcon, AppBarTitle, Row, SectionLabel, Toggle } from '@/components/primitives';
+import { AppBar, AppBarIcon, AppBarTitle, Row, SectionLabel } from '@/components/primitives';
 import { Screen, ScreenBody } from '@/components/Screen';
 import { Slider } from '@/components/Slider';
 import { useSettings } from '@/state/settingsStore';
@@ -15,7 +15,6 @@ export default function DisplaySettings() {
   const router = useRouter();
   const prefs = useSettings((s) => s.prefs);
   const setPref = useSettings((s) => s.set);
-  const merge = useSettings((s) => s.merge);
 
   return (
     <Screen>
@@ -49,25 +48,9 @@ export default function DisplaySettings() {
           accessibilityLabel="Translation text size"
         />
 
+        {/* Live is translation-only, and there is one layout: two panels, one
+            per language. The source text lives in the Library transcript. */}
         <SectionLabel>Layout</SectionLabel>
-        {/* Live is translation-only; the source text lives in the Library
-            transcript. What is configurable here is the layout instead. */}
-        <Row
-          label="Default layout"
-          sub={
-            prefs.viewMode === 'panels'
-              ? 'Speaker panels — one column each, landscape'
-              : 'Stream — one column, newest at top'
-          }
-          value={prefs.viewMode === 'panels' ? 'Panels' : 'Stream'}
-          chevron
-          onPress={() =>
-            merge({
-              viewMode: prefs.viewMode === 'panels' ? 'stream' : 'panels',
-              translationType: prefs.viewMode === 'panels' ? 'one_way' : 'two_way',
-            })
-          }
-        />
         <Row
           label="Max lines kept"
           sub="Older lines stay one “View more” away"
@@ -75,28 +58,6 @@ export default function DisplaySettings() {
           chevron
           onPress={() =>
             setPref('maxLinesKept', prefs.maxLinesKept >= 900 ? 100 : prefs.maxLinesKept + 200)
-          }
-        />
-        <Row
-          label="Auto-hide controls"
-          sub="After 3s while translating"
-          right={
-            <Toggle
-              value={prefs.autoHideControls}
-              onChange={(v) => setPref('autoHideControls', v)}
-              accessibilityLabel="Auto-hide the control bar"
-            />
-          }
-        />
-        <Row
-          label="Dim in table mode"
-          sub="After 60s without interaction"
-          right={
-            <Toggle
-              value={prefs.dimInTableMode}
-              onChange={(v) => setPref('dimInTableMode', v)}
-              accessibilityLabel="Dim in desk mode"
-            />
           }
         />
 

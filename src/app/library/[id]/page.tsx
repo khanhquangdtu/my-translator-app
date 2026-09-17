@@ -118,7 +118,7 @@ export default function LibraryDetail() {
 
   const meta =
     `${formatDate(data.created_at)} · ${formatDuration(data.duration_sec)}` +
-    ` · ${shortCode(data.source_lang)} → ${shortCode(data.target_lang)}` +
+    ` · ${shortCode(data.source_lang)} ↔ ${shortCode(data.target_lang)}` +
     (speakerIndex.size > 0 ? ` · ${speakerIndex.size} speakers` : '');
 
   return (

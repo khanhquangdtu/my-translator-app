@@ -6,9 +6,10 @@
  * highest-acceptance pattern there is, and capture quality is the biggest risk
  * to the whole experience.
  *
- * Step 2 just confirms the language pair, both defaulted to Auto. Keys are not
- * part of onboarding at all — the server holds them, so there is nothing for
- * anyone to paste.
+ * Step 2 just confirms the two languages of the conversation. There is no
+ * source and no target: translation runs both ways, so each side is simply the
+ * language the other one is read in. Keys are not part of onboarding at all —
+ * the server holds them, so there is nothing for anyone to paste.
  *
  * The permission request is a bare `getUserMedia` whose stream is stopped
  * immediately. There is no "ask without recording" API in the browser: opening
@@ -77,7 +78,7 @@ export default function Onboarding() {
             onPress={() => router.replace('/onboarding/1')}
           />
         ) : null}
-        <AppBarTitle>{step === 1 ? 'Let the phone listen' : 'Default languages'}</AppBarTitle>
+        <AppBarTitle>{step === 1 ? 'Let the phone listen' : 'The two languages'}</AppBarTitle>
         {/* `/` lands here on a device that has not onboarded, so this is the
             first screen most people ever see. */}
         <InstallButton />
@@ -129,36 +130,39 @@ export default function Onboarding() {
         <>
           <ScreenBody className={styles.body}>
             <span className={styles.lede}>
-              Pick what you usually translate between. You can change this anytime from the language
-              pill on the main screen.
+              Pick the two languages of the conversation. Everything said in one comes back in the
+              other, both ways at once. You can change them anytime from the pills on the main
+              screen — even mid-session.
             </span>
 
-            <div className={styles.secLabel}>SOURCE — WHAT THE APP HEARS</div>
+            <div className={styles.secLabel}>LANGUAGE A</div>
             <Select
               label={
-                prefs.sourceLanguage === AUTO
-                  ? '✨ Auto-detect'
-                  : languageName(prefs.sourceLanguage)
-              }
-              highlighted={prefs.sourceLanguage === AUTO}
-              onPress={() => router.push('/language-picker?target=source')}
-            />
-            <span className={styles.note}>
-              Default. Soniox identifies the spoken language on the fly — handy for mixed-language
-              meetings. Picking one language explicitly improves accuracy and speaker detection.
-            </span>
-
-            <div className={styles.secLabel}>TARGET — WHAT YOU READ</div>
-            <Select
-              label={
-                prefs.targetLanguage === AUTO
+                prefs.languageA === AUTO
                   ? `✨ Auto — device language (${languageName(deviceLanguage())})`
-                  : languageName(prefs.targetLanguage)
+                  : languageName(prefs.languageA)
               }
-              onPress={() => router.push('/language-picker?target=target')}
+              highlighted={prefs.languageA === AUTO}
+              onPress={() => router.push('/language-picker?target=a')}
             />
             <span className={styles.note}>
-              Default. Follows your browser&apos;s language; pick a fixed one to override.
+              One side of the table. Naming it explicitly, rather than leaving it on the device
+              language, improves accuracy and speaker detection.
+            </span>
+
+            <div className={styles.secLabel}>LANGUAGE B</div>
+            <Select
+              label={
+                prefs.languageB === AUTO
+                  ? `✨ Auto — device language (${languageName(deviceLanguage())})`
+                  : languageName(prefs.languageB)
+              }
+              highlighted={prefs.languageB === AUTO}
+              onPress={() => router.push('/language-picker?target=b')}
+            />
+            <span className={styles.note}>
+              The other side. Each panel shows this language translated into the one above, and the
+              other way round.
             </span>
           </ScreenBody>
 

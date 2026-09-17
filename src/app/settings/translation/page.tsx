@@ -15,12 +15,9 @@ export default function TranslationSettings() {
   const router = useRouter();
   const prefs = useSettings((s) => s.prefs);
   const setPref = useSettings((s) => s.set);
-  const merge = useSettings((s) => s.merge);
 
   const speakerOrder = useLive((s) => s.speakerOrder);
   const speakerNames = useLive((s) => s.speakerNames);
-
-  const twoWay = prefs.translationType === 'two_way';
 
   const namedCount = speakerOrder.filter((id) => speakerNames[id]).length;
 
@@ -36,59 +33,31 @@ export default function TranslationSettings() {
       </AppBar>
 
       <ScreenBody className={styles.body}>
+        {/* Two languages, no direction: translation always runs both ways, so
+            each side is simply the language the other one is read in. */}
         <SectionLabel>Languages</SectionLabel>
         <Row
-          label="Translation type"
-          value={twoWay ? 'Two-way' : 'One-way'}
+          label="Language A"
+          value={languageName(prefs.languageA)}
           chevron
-          onPress={() =>
-            merge({
-              translationType: twoWay ? 'one_way' : 'two_way',
-              viewMode: twoWay ? 'stream' : 'panels',
-            })
-          }
+          onPress={() => router.push('/language-picker?target=a')}
         />
-        {twoWay ? (
-          <>
-            <Row
-              label="Language A"
-              value={languageName(prefs.languageA)}
-              chevron
-              onPress={() => router.push('/language-picker?target=a')}
-            />
-            <Row
-              label="Language B"
-              value={languageName(prefs.languageB)}
-              chevron
-              onPress={() => router.push('/language-picker?target=b')}
-            />
-          </>
-        ) : (
-          <>
-            <Row
-              label="Source"
-              value={languageName(prefs.sourceLanguage)}
-              chevron
-              onPress={() => router.push('/language-picker?target=source')}
-            />
-            <Row
-              label="Target"
-              value={languageName(prefs.targetLanguage)}
-              chevron
-              onPress={() => router.push('/language-picker?target=target')}
-            />
-          </>
-        )}
+        <Row
+          label="Language B"
+          value={languageName(prefs.languageB)}
+          chevron
+          onPress={() => router.push('/language-picker?target=b')}
+        />
 
         <SectionLabel>Advanced</SectionLabel>
         <Row
           label="Strict language"
-          sub="Reject text outside the source language"
+          sub="Reject text outside the two chosen languages"
           right={
             <Toggle
               value={prefs.languageHintsStrict}
               onChange={(v) => setPref('languageHintsStrict', v)}
-              accessibilityLabel="Accept the source language only"
+              accessibilityLabel="Accept the two chosen languages only"
             />
           }
         />

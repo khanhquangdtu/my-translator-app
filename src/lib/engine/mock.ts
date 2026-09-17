@@ -52,8 +52,10 @@ export class MockEngine implements TranslationEngine {
 
   private timers: ReturnType<typeof setTimeout>[] = [];
   private index = 0;
+  private config: EngineConfig | null = null;
 
-  connect(_config: EngineConfig) {
+  connect(config: EngineConfig) {
+    this.config = config;
     this.onStatusChange?.('connecting');
     this.timers.push(
       setTimeout(() => {
@@ -64,8 +66,24 @@ export class MockEngine implements TranslationEngine {
     );
   }
 
+  /** Mid-session language changes, same as the real engine applies them. */
+  reconfigure(config: EngineConfig) {
+    this.config = config;
+  }
+
   private scheduleTurn() {
     const line = SCRIPT[this.index % SCRIPT.length];
+    /*
+     * Which side of the table this turn came from, alternating.
+     *
+     * The panels each render one direction and filter on the language a turn
+     * was *spoken* in, so a mock that labelled every turn the same way would
+     * fill one column and leave the other blank — the half of the layout the
+     * mock exists to show. The script's own text stays Japanese either way;
+     * this is a layout harness, not a translation.
+     */
+    const spoken =
+      this.index % 2 === 0 ? (this.config?.languageA ?? 'en') : (this.config?.languageB ?? 'vi');
     this.index++;
 
     // Type the source out word by word so the provisional dimming is visible.
@@ -76,7 +94,7 @@ export class MockEngine implements TranslationEngine {
         setTimeout(
           () => {
             shown += ch;
-            this.onProvisional?.(shown, line.speaker, 'ja');
+            this.onProvisional?.(shown, line.speaker, spoken);
           },
           PROVISIONAL_STEP_MS + i * 40
         )
@@ -99,7 +117,7 @@ export class MockEngine implements TranslationEngine {
       if (i % 3 !== 0 && i !== dstChars.length - 1) return;
       this.timers.push(
         setTimeout(() => {
-          this.onProvisionalTranslation?.(line.dst.slice(0, i + 1), 'ja');
+          this.onProvisionalTranslation?.(line.dst.slice(0, i + 1), spoken);
         }, dstStart + i * 30)
       );
     });
@@ -108,7 +126,7 @@ export class MockEngine implements TranslationEngine {
     this.timers.push(
       setTimeout(() => {
         this.onProvisional?.('', null, null);
-        this.onOriginal?.(line.src, line.speaker, 'ja');
+        this.onOriginal?.(line.src, line.speaker, spoken);
         this.onConfidence?.(0.93);
       }, finaliseAt)
     );
@@ -116,7 +134,7 @@ export class MockEngine implements TranslationEngine {
       setTimeout(() => {
         // The preview gives way to the real thing, exactly as it does live.
         this.onProvisionalTranslation?.('', null);
-        this.onTranslation?.(line.dst, 'ja');
+        this.onTranslation?.(line.dst, spoken);
       }, finaliseAt + 500)
     );
 
@@ -131,6 +149,7 @@ export class MockEngine implements TranslationEngine {
     this.timers.forEach(clearTimeout);
     this.timers = [];
     this.index = 0;
+    this.config = null;
     this.isConnected = false;
     this.onStatusChange?.('disconnected');
   }

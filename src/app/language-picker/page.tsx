@@ -1,7 +1,6 @@
 /**
  * Language picker — full-screen and searchable, because a 60-item native picker
- * wheel is unusable on a phone. Auto-detect is pinned to the top of the source
- * list, recents come next, then everything else.
+ * wheel is unusable on a phone. Recents come first, then everything else.
  *
  * Presented as a modal (slide up from the bottom), which is what
  * `presentation: 'modal'` gave it in the mobile stack.
@@ -13,22 +12,15 @@ import { Suspense, useMemo, useState } from 'react';
 
 import { AppBar, AppBarIcon, AppBarTitle, cx, Field } from '@/components/primitives';
 import { Screen, ScreenBody } from '@/components/Screen';
-import {
-  AUTO_DETECT,
-  findLanguage,
-  LANGUAGES,
-  languageName,
-  type Language,
-} from '@/data/languages';
+import { findLanguage, LANGUAGES, languageName, type Language } from '@/data/languages';
 import { AUTO, deviceLanguage, useSettings } from '@/state/settingsStore';
 
 import styles from './language-picker.module.css';
 
-type Target = 'source' | 'target' | 'a' | 'b';
+/** The two sides of the conversation — translation only ever goes both ways. */
+type Target = 'a' | 'b';
 
 const TITLES: Record<Target, string> = {
-  source: 'Source language',
-  target: 'Target language',
   a: 'Language A',
   b: 'Language B',
 };
@@ -38,7 +30,7 @@ type Section = { label: string | null; items: Language[] };
 function LanguagePicker() {
   const router = useRouter();
   const params = useSearchParams();
-  const target = (params.get('target') as Target) ?? 'source';
+  const target: Target = params.get('target') === 'b' ? 'b' : 'a';
 
   const prefs = useSettings((s) => s.prefs);
   const setPref = useSettings((s) => s.set);
@@ -46,31 +38,25 @@ function LanguagePicker() {
 
   const [query, setQuery] = useState('');
 
-  const current =
-    target === 'source'
-      ? prefs.sourceLanguage
-      : target === 'target'
-        ? prefs.targetLanguage
-        : target === 'a'
-          ? prefs.languageA
-          : prefs.languageB;
+  const current = target === 'a' ? prefs.languageA : prefs.languageB;
 
   const sections = useMemo<Section[]>(() => {
     const q = query.trim().toLowerCase();
     const matches = (l: Language) =>
       !q || l.name.toLowerCase().includes(q) || l.native.toLowerCase().includes(q) || l.code === q;
 
-    // Both sides get an Auto row, but they mean different things: on the source
-    // side Soniox detects the spoken language, on the target side the app
-    // follows whatever the browser is set to.
-    const autoRow: Language =
-      target === 'source'
-        ? AUTO_DETECT
-        : {
-            code: AUTO,
-            name: 'Auto',
-            native: `device language (${languageName(deviceLanguage())})`,
-          };
+    /*
+     * An Auto row on both sides, meaning "follow the device".
+     *
+     * Not auto-*detect*: a two-way pair is what Soniox is told to translate
+     * between, and a side it has to discover for itself is not a side. This one
+     * is resolved to a concrete code before it reaches the engine.
+     */
+    const autoRow: Language = {
+      code: AUTO,
+      name: 'Auto',
+      native: `device language (${languageName(deviceLanguage())})`,
+    };
     const head: Language[] = matches(autoRow) ? [autoRow] : [];
 
     const recents = prefs.recentLanguages
@@ -85,13 +71,10 @@ function LanguagePicker() {
     if (recents.length) out.push({ label: 'Recent', items: recents });
     if (rest.length) out.push({ label: 'All languages', items: rest });
     return out;
-  }, [query, prefs.recentLanguages, target]);
+  }, [query, prefs.recentLanguages]);
 
   const select = (code: string) => {
-    if (target === 'source') setPref('sourceLanguage', code);
-    else if (target === 'target') setPref('targetLanguage', code);
-    else if (target === 'a') setPref('languageA', code);
-    else setPref('languageB', code);
+    setPref(target === 'a' ? 'languageA' : 'languageB', code);
 
     rememberLanguage(code);
     router.back();

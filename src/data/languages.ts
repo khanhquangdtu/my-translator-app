@@ -2,7 +2,7 @@
  * Language table for the picker.
  *
  * Codes are the ISO-639-1 values Soniox accepts in `language_hints` and
- * `translation.target_language`. Native names matter here: the picker is a
+ * `translation.language_a` / `language_b`. Native names matter here: the picker is a
  * 70-row full-screen list, and a reader scanning for their own language finds
  * "Tiếng Việt" far faster than "Vietnamese".
  */
@@ -13,11 +13,15 @@ export type Language = {
   native: string;
 };
 
-/** Pinned to the top of the source picker; not valid as a target. */
-export const AUTO_DETECT: Language = {
+/**
+ * The stand-in for a side left on 'auto', which means "follow the device
+ * language". It is resolved to a concrete code before it reaches the engine —
+ * a two-way pair has no room for a side Soniox has to discover for itself.
+ */
+export const AUTO_LANGUAGE: Language = {
   code: 'auto',
-  name: 'Auto-detect',
-  native: 'less accurate',
+  name: 'Auto',
+  native: 'device language',
 };
 
 export const LANGUAGES: Language[] = [
@@ -88,7 +92,7 @@ export const LANGUAGES: Language[] = [
 const BY_CODE = new Map(LANGUAGES.map((l) => [l.code, l]));
 
 export function findLanguage(code: string): Language | undefined {
-  return code === 'auto' ? AUTO_DETECT : BY_CODE.get(code);
+  return code === 'auto' ? AUTO_LANGUAGE : BY_CODE.get(code);
 }
 
 /** Short uppercase label for the language pill, e.g. "JA → EN". */

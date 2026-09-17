@@ -10,7 +10,7 @@
 
 import { create } from 'zustand';
 
-import type { CustomContext, TranslationType } from '@/lib/engine/types';
+import type { CustomContext } from '@/lib/engine/types';
 import { readJson, writeJson } from '@/lib/storage/prefs';
 import type { SummaryProvider } from '@/lib/summary/types';
 import {
@@ -19,20 +19,19 @@ import {
   MIN_TRANSCRIPT_SIZE,
 } from '@/theme/tokens';
 
-/** Live layout. Panels need width, so they are landscape-locked. */
-export type ViewMode = 'stream' | 'panels';
-
-/** `'auto'` on the target side means "follow the device language". */
+/** `'auto'` means "follow the device language". */
 export const AUTO = 'auto';
 
 export type Prefs = {
-  sourceLanguage: string;
-  /** a language code, or 'auto' to follow the device */
-  targetLanguage: string;
-  translationType: TranslationType;
+  /**
+   * The conversation pair. Translation is always two-way — speech in A comes
+   * back in B and vice versa — so there is no source/target, only two sides
+   * that each read the other. Either may be stored as 'auto'; the engine is
+   * only ever handed the resolved codes.
+   */
   languageA: string;
   languageB: string;
-  /** reject speech outside the hinted language instead of guessing at it */
+  /** reject speech outside the hinted languages instead of guessing at it */
   languageHintsStrict: boolean;
   /** how long a pause must run before Soniox finalises a turn, ms */
   endpointDelay: number;
@@ -42,7 +41,6 @@ export type Prefs = {
   fontSize: number;
   /** how many turns render at once; older ones are a "view more" press away */
   maxLinesKept: number;
-  viewMode: ViewMode;
 
   speakerDetection: boolean;
   showSpeakerChip: boolean;
@@ -52,8 +50,6 @@ export type Prefs = {
   keepAwake: boolean;
   backgroundListening: boolean;
   costWarnings: boolean;
-  autoHideControls: boolean;
-  dimInTableMode: boolean;
 
   // ── AI summary ──
   summaryProvider: SummaryProvider;
@@ -83,9 +79,6 @@ export function resolveLanguage(code: string): string {
 }
 
 const DEFAULTS: Prefs = {
-  sourceLanguage: AUTO,
-  targetLanguage: AUTO,
-  translationType: 'two_way',
   languageA: 'en',
   languageB: 'vi',
   languageHintsStrict: false,
@@ -113,7 +106,6 @@ const DEFAULTS: Prefs = {
    * the saved transcript either way.
    */
   maxLinesKept: 100,
-  viewMode: 'panels',
 
   speakerDetection: true,
   showSpeakerChip: true,
@@ -122,8 +114,6 @@ const DEFAULTS: Prefs = {
   keepAwake: true,
   backgroundListening: true,
   costWarnings: true,
-  autoHideControls: true,
-  dimInTableMode: true,
 
   summaryProvider: 'openai',
   // English by default rather than AUTO: the app's own chrome is English, and a

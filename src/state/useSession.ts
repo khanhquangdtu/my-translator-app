@@ -37,9 +37,6 @@ const AUTOSAVE_MS = 15000;
  */
 function engineConfig(prefs: Prefs): EngineConfig {
   return {
-    sourceLanguage: prefs.sourceLanguage,
-    targetLanguage: resolveLanguage(prefs.targetLanguage),
-    translationType: prefs.translationType,
     languageA: resolveLanguage(prefs.languageA),
     languageB: resolveLanguage(prefs.languageB),
     languageHintsStrict: prefs.languageHintsStrict,
@@ -69,8 +66,8 @@ export function useSession() {
 
     const data = live.toSessionData(
       MOCK_ENABLED ? 'mock' : 'soniox',
-      prefs.sourceLanguage,
-      resolveLanguage(prefs.targetLanguage)
+      resolveLanguage(prefs.languageA),
+      resolveLanguage(prefs.languageB)
     );
     if (!data) return;
 
@@ -234,8 +231,8 @@ export function useSession() {
   /*
    * Language changes made while listening reach the engine, not just the next
    * session. The two-way panel headers exist to be tapped mid-session — pick a
-   * language, flip a direction, toggle two-way from the ⋯ sheet — and every
-   * one of those writes prefs. Without this, the panel said "EN → VI" while
+   * language, flip a direction — and every one of those writes prefs. Without
+   * this, the panel said "EN → VI" while
    * Soniox kept translating the pair it was started with; English speech was
    * then a third language to it, transcribed but never translated, and the
    * reader saw their words recognised with no translation anywhere.

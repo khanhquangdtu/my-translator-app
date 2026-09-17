@@ -58,7 +58,7 @@ function engineWith(config: EngineConfig) {
   };
 }
 
-const TWO_WAY: EngineConfig = { translationType: 'two_way', languageA: 'vi', languageB: 'en' };
+const TWO_WAY: EngineConfig = { languageA: 'vi', languageB: 'en' };
 
 describe('two-way translation routing', () => {
   it('takes the spoken language from source_language, not the frame', () => {
@@ -136,7 +136,7 @@ describe('two-way translation routing', () => {
     // The user re-picks a panel language mid-session. There is no socket in
     // this test, so `reconfigure` only stores the config — which is exactly
     // the seam routing reads.
-    engine.reconfigure({ translationType: 'two_way', languageA: 'vi', languageB: 'fr' });
+    engine.reconfigure({ languageA: 'vi', languageB: 'fr' });
 
     // Unattributed token written in the new B: said in A under the new pair.
     feed([{ text: 'Bonjour', is_final: true, language: 'fr', translation_status: 'translation' }]);
@@ -155,20 +155,19 @@ describe('two-way translation routing', () => {
   });
 });
 
-describe('one-way translation', () => {
-  it('keeps using the spoken language of the frame', () => {
-    const { feed, translations } = engineWith({
-      translationType: 'one_way',
-      targetLanguage: 'en',
-    });
+describe('translation with no pair configured', () => {
+  it('refuses to name a direction it was never told', () => {
+    // A frame that arrives before the config has been stored, which is the only
+    // way the pair is missing now that every session is two-way.
+    const { feed, translations } = engineWith({});
 
     feed([
       { text: 'Xin chào', is_final: true, language: 'vi', translation_status: 'original' },
       { text: 'Hello', is_final: true, language: 'en', translation_status: 'translation' },
     ]);
 
-    // No source_language and no A/B pair to flip through - the frame's own
-    // originals are the answer, because there is only one direction to be in.
-    expect(translations).toEqual([['Hello', 'vi']]);
+    // No source_language and no A/B pair to flip through: null, which the store
+    // pairs by arrival order rather than guessing a panel.
+    expect(translations).toEqual([['Hello', null]]);
   });
 });

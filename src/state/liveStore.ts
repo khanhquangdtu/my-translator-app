@@ -100,9 +100,9 @@ type LiveState = {
    * The language that was *spoken* to produce `provisionalDst`.
    *
    * Two-way panels each show one direction, so the preview has to know which
-   * column it belongs to. Null when the engine cannot say (one-way, or a
-   * translation whose direction Soniox did not label) — then it is shown
-   * wherever the provisional source is.
+   * column it belongs to. Null when the engine cannot say — a translation whose
+   * direction Soniox did not label — and then it is shown wherever the
+   * provisional source is.
    */
   provisionalDstLang: string | null;
 
@@ -110,8 +110,6 @@ type LiveState = {
   level: number;
   /** session-clock second of the last buffer loud enough to count as speech */
   lastLoudAtSec: number;
-  /** session-clock second of the last screen tap or orientation change */
-  lastInteractionSec: number;
 
   /** when the CURRENT chunk started; null while stopped */
   startedAt: number | null;
@@ -162,8 +160,6 @@ type LiveState = {
   setStatus: (status: EngineStatus) => void;
   setError: (message: string | null, attempt?: number) => void;
   setLevel: (level: number) => void;
-  /** Restart the table-mode chrome timer. */
-  noteInteraction: () => void;
   setRunning: (running: boolean) => void;
   setTitle: (title: string) => void;
   tick: () => void;
@@ -178,7 +174,13 @@ type LiveState = {
   acceptSuggestion: (id: string) => void;
   dismissSuggestion: (id: string) => void;
   reset: () => void;
-  toSessionData: (engine: string, sourceLang: string, targetLang: string) => SessionData | null;
+  /**
+   * `langA`/`langB` are the two-way pair, already resolved. They are stored in
+   * the record's `source_lang`/`target_lang` fields, whose names predate the
+   * removal of one-way mode and are kept so sessions saved before it still
+   * read back.
+   */
+  toSessionData: (engine: string, langA: string, langB: string) => SessionData | null;
 };
 
 let nextTurnId = 1;
@@ -203,7 +205,6 @@ export const useLive = create<LiveState>()((set, get) => ({
   provisionalDstLang: null,
   level: 0,
   lastLoudAtSec: 0,
-  lastInteractionSec: 0,
 
   startedAt: null,
   accumulatedSec: 0,
@@ -237,7 +238,6 @@ export const useLive = create<LiveState>()((set, get) => ({
       accumulatedSec: 0,
       elapsedSec: 0,
       lastLoudAtSec: 0,
-      lastInteractionSec: 0,
       chunkStartTurnId: nextTurnId,
       bankedSegments: [],
       droppedSegments: 0,
@@ -255,7 +255,6 @@ export const useLive = create<LiveState>()((set, get) => ({
       bankedSegments: [],
       startedAt: Date.now(),
       lastLoudAtSec: get().elapsedSec,
-      lastInteractionSec: get().elapsedSec,
     });
   },
 
@@ -362,10 +361,10 @@ export const useLive = create<LiveState>()((set, get) => ({
 
   addTranslation: (text, sourceLanguage) => {
     const state = get();
-    // In two-way mode, translations for both languages are interleaved. Match
-    // the translation to a pending turn of the same source language so an
-    // English→Vietnamese translation doesn't land on a Vietnamese turn (or
-    // vice versa). Falls back to plain FIFO when the language is unknown.
+    // Translations for both languages are interleaved. Match the translation to
+    // a pending turn of the same source language so an English→Vietnamese
+    // translation doesn't land on a Vietnamese turn (or vice versa). Falls back
+    // to plain FIFO when the language is unknown.
     let index = sourceLanguage
       ? state.turns.findIndex((t) => t.pending && t.language === sourceLanguage)
       : state.turns.findIndex((t) => t.pending);
@@ -498,8 +497,6 @@ export const useLive = create<LiveState>()((set, get) => ({
     }
   },
 
-  noteInteraction: () => set({ lastInteractionSec: get().elapsedSec }),
-
   setRunning: (running) => set({ running }),
 
   setTitle: (title) =>
@@ -619,7 +616,6 @@ export const useLive = create<LiveState>()((set, get) => ({
       provisionalDstLang: null,
       level: 0,
       lastLoudAtSec: 0,
-      lastInteractionSec: 0,
       startedAt: null,
       accumulatedSec: 0,
       elapsedSec: 0,
@@ -639,7 +635,7 @@ export const useLive = create<LiveState>()((set, get) => ({
       revision: 0,
     }),
 
-  toSessionData: (engine, sourceLang, targetLang) => {
+  toSessionData: (engine, langA, langB) => {
     const state = get();
     if (!state.sessionId || !state.sessionCreatedAt) return null;
 
@@ -663,8 +659,8 @@ export const useLive = create<LiveState>()((set, get) => ({
       ended_at: state.running ? null : new Date().toISOString(),
       title: state.sessionTitle,
       engine,
-      source_lang: sourceLang,
-      target_lang: targetLang,
+      source_lang: langA,
+      target_lang: langB,
       duration_sec: state.elapsedSec,
       chunks,
       speaker_names: rosterNames(state),

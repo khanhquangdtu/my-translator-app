@@ -32,6 +32,12 @@ export type SessionData = {
   ended_at: string | null;
   title: string;
   engine: string | null;
+  /**
+   * The two languages of the conversation. The field names predate the removal
+   * of one-way translation — every session is two-way, so these are simply
+   * sides A and B — and they are kept as they are so records written before it
+   * still read back.
+   */
   source_lang: string;
   target_lang: string;
   duration_sec: number;
@@ -55,7 +61,6 @@ export type SessionSummary = {
   target_lang: string;
   speaker_count: number;
   segment_count: number;
-  two_way: boolean;
   has_summary: boolean;
 };
 
@@ -135,7 +140,6 @@ export function summarize(data: SessionData): SessionSummary {
     target_lang: data.target_lang,
     speaker_count: speakers.size,
     segment_count: segmentCount,
-    two_way: false,
     has_summary: !!data.summary,
   };
 }
@@ -157,7 +161,7 @@ export function autoTitle(data: SessionData): string {
 export function toMarkdown(data: SessionData): string {
   const lines: string[] = [];
   const title = data.title || autoTitle(data);
-  const langPair = `${data.source_lang || '?'} → ${data.target_lang || '?'}`;
+  const langPair = `${data.source_lang || '?'} ↔ ${data.target_lang || '?'}`;
 
   lines.push(`# ${title}`, '');
   lines.push(

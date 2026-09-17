@@ -23,11 +23,9 @@ export default function SettingsRoot() {
   const prefs = useSettings((s) => s.prefs);
   const setPref = useSettings((s) => s.set);
 
-  // Same rule as Live: source may genuinely be AUTO (Soniox detects it), but the
-  // target never is — 'auto' means "follow the device", so show what it resolves
-  // to rather than a second, meaningless AUTO.
-  const langPair = `${shortCode(prefs.sourceLanguage)} → ${shortCode(resolveLanguage(prefs.targetLanguage))}`;
-  const typeLabel = prefs.translationType === 'two_way' ? 'Two-way' : 'One-way';
+  // Same rule as Live: 'auto' means "follow the device", so show what it
+  // resolves to rather than a meaningless AUTO.
+  const langPair = `${shortCode(resolveLanguage(prefs.languageA))} ↔ ${shortCode(resolveLanguage(prefs.languageB))}`;
 
   return (
     <Screen>
@@ -45,7 +43,7 @@ export default function SettingsRoot() {
         <Row
           glyph="🌐"
           label="Translation"
-          sub={`${langPair} · ${typeLabel} · Speakers ${prefs.speakerDetection ? 'on' : 'off'}`}
+          sub={`${langPair} · Speakers ${prefs.speakerDetection ? 'on' : 'off'}`}
           chevron
           onPress={() => router.push('/settings/translation')}
         />
@@ -68,7 +66,7 @@ export default function SettingsRoot() {
         <Row
           glyph="▦"
           label="Display"
-          sub={`${prefs.fontSize} px · ${prefs.viewMode === 'panels' ? 'Speaker panels' : 'Stream'}`}
+          sub={`${prefs.fontSize} px · ${prefs.maxLinesKept} lines kept`}
           chevron
           onPress={() => router.push('/settings/display')}
         />
