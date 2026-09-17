@@ -33,6 +33,7 @@
 
 import { memo } from 'react';
 
+import { splitSentences } from '@/lib/transcript/sentences';
 import { color, labelFor, railFor } from '@/theme/tokens';
 
 import { cx } from './primitives';
@@ -112,7 +113,19 @@ function TurnViewImpl({
                 <span
                   className={styles.dst}
                   style={{ fontSize, lineHeight: `${lineHeight}px`, color: dstColor }}>
-                  {primary}
+                  {/*
+                    One utterance is often several sentences, and run together
+                    they are a paragraph the reader has to parse before they can
+                    read it. Broken here rather than upstream so both callers —
+                    the live stream and the archive — get it without either
+                    having to ask. The index keys a list rebuilt from this line's
+                    own text, so entry i is always the same sentence.
+                  */}
+                  {splitSentences(primary).map((sentence, i) => (
+                    <span key={i} className={styles.sentence}>
+                      {sentence}
+                    </span>
+                  ))}
                 </span>
                 {line.showSource && secondary ? (
                   <span

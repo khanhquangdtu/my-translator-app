@@ -24,7 +24,13 @@ import styles from './TwoWayPanels.module.css';
 
 export type TwoWayLine = {
   id: string;
-  text: string;
+  /**
+   * The block's text, already broken into sentences — one entry per line the
+   * panel draws. A block is a run of utterances from one speaker, which is
+   * paragraph-shaped and unreadable at a glance as a single run; see
+   * `splitSentences` for where the breaks fall.
+   */
+  sentences: string[];
   state: 'live' | 'final' | 'old';
 };
 
@@ -138,7 +144,19 @@ export function TwoWayPanels({
                     line.state === 'old' && styles.lineOld
                   )}
                   style={{ fontSize, lineHeight: `${fontSize * 1.5}px` }}>
-                  {line.text}
+                  {/*
+                    Sentences of one block are separate lines but not separate
+                    blocks: the gap between them is the line gap, while the
+                    margin below the block keeps its distance from the next
+                    speaker's. The index is a safe key — the array is rebuilt
+                    from this block's text alone, so entry i is always the same
+                    sentence of the same block.
+                  */}
+                  {line.sentences.map((sentence, i) => (
+                    <span key={i} className={styles.sentence}>
+                      {sentence}
+                    </span>
+                  ))}
                 </span>
               ))}
             </div>

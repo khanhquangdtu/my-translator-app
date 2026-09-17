@@ -51,6 +51,7 @@ import { hasOpenAIKey } from '@/lib/config/capabilities';
 import { MOCK_ENABLED } from '@/lib/engine/mock';
 import { readSegmentRange } from '@/lib/sessions/history';
 import { nextPage, splitWindow } from '@/lib/sessions/window';
+import { splitSentences } from '@/lib/transcript/sentences';
 import { copyToClipboard, lockLandscape, unlockOrientation } from '@/lib/platform';
 import { speakerDisplayName, useLive, type Turn } from '@/state/liveStore';
 import { resolveLanguage, useSettings } from '@/state/settingsStore';
@@ -546,7 +547,7 @@ export default function LiveScreen() {
         .reverse()
         .map((b, i) => ({
           id: b.id,
-          text: b.texts.join(' '),
+          sentences: splitSentences(b.texts.join(' ')),
           state: (i < 2 ? 'final' : 'old') as 'live' | 'final' | 'old',
         }));
 
@@ -565,10 +566,22 @@ export default function LiveScreen() {
         const head = lines[0];
         const headSpeaker = blocks.length > 0 ? blocks[blocks.length - 1].speaker : null;
         if (head && provisional.speaker === headSpeaker) {
-          head.text = liveText + ' ' + head.text;
+          /*
+           * Into the same block, but onto a line of its own.
+           *
+           * It used to be concatenated onto the head block's text, which read
+           * as one sentence running into the next — "Now I'll move on to
+           * Revenue is up twelve percent year over year." — because the words
+           * still being spoken have no full stop to separate them from the
+           * finished sentence they were glued to. Its own line is what it
+           * actually is: the same speaker, still talking, one utterance later.
+           * Staying inside the block is what keeps it spaced as a continuation
+           * rather than as a new turn.
+           */
+          head.sentences = [...splitSentences(liveText), ...head.sentences];
           head.state = 'live';
         } else {
-          lines.unshift({ id: 'provisional', text: liveText, state: 'live' });
+          lines.unshift({ id: 'provisional', sentences: splitSentences(liveText), state: 'live' });
         }
       }
 

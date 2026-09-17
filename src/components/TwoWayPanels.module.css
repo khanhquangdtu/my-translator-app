@@ -138,12 +138,23 @@
   padding: 0 16px 16px;
 }
 
+/*
+ * A block — one speaker's run, in sentences.
+ *
+ * The 8px below it is what separates one run from the next; sentences inside it
+ * get a new line and nothing more, because they are one person still talking
+ * and spacing them like blocks would undo the grouping the block exists for.
+ */
 .line {
   display: block;
   font-weight: 400;
   color: var(--text-primary);
   margin-bottom: 8px;
   overflow-wrap: break-word;
+}
+
+.sentence {
+  display: block;
 }
 
 .lineLive {

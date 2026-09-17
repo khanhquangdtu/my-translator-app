@@ -89,6 +89,15 @@
   overflow-wrap: break-word;
 }
 
+/*
+ * Sentences of one utterance sit on their own lines, separated by the line
+ * height alone. The 6px the block puts between its lines is what marks one
+ * utterance from the next; spending it here too would flatten that distinction.
+ */
+.sentence {
+  display: block;
+}
+
 .src {
   font-weight: 400;
   overflow-wrap: break-word;
