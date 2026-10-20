@@ -25,10 +25,8 @@ import styles from './TwoWayPanels.module.css';
 export type TwoWayLine = {
   id: string;
   /**
-   * The block's text, already broken into sentences — one entry per line the
-   * panel draws. A block is a run of utterances from one speaker, which is
-   * paragraph-shaped and unreadable at a glance as a single run; see
-   * `splitSentences` for where the breaks fall.
+   * One recognised segment, broken into sentences with one entry per line.
+   * Consecutive segments stay separate even when their speaker is the same.
    */
   sentences: string[];
   state: 'live' | 'final' | 'old';
@@ -52,6 +50,9 @@ export function TwoWayPanels({
   onFontUp,
   onFontDown,
   onSwapPanels,
+  recordingLabel,
+  recordingError,
+  stopping = false,
 }: {
   panels: [TwoWayPanelData, TwoWayPanelData];
   fontSize: number;
@@ -62,6 +63,9 @@ export function TwoWayPanels({
   onFontUp?: () => void;
   onFontDown?: () => void;
   onSwapPanels?: () => void;
+  recordingLabel?: string;
+  recordingError?: string;
+  stopping?: boolean;
 }) {
   const { width, height, landscape } = useWindowSize();
 
@@ -125,7 +129,7 @@ export function TwoWayPanels({
 
   return (
     <div
-      className={cx(styles.panels, rotated ? styles.panelsRotated : styles.panelsUpright)}
+      className={cx(styles.panels, rotated ? styles.panelsRotated : styles.panelsUpright, !!recordingLabel && styles.withRecording)}
       style={containerStyle}>
       {panels.map((panel, index) => (
         <div
@@ -145,12 +149,9 @@ export function TwoWayPanels({
                   )}
                   style={{ fontSize, lineHeight: `${fontSize * 1.5}px` }}>
                   {/*
-                    Sentences of one block are separate lines but not separate
-                    blocks: the gap between them is the line gap, while the
-                    margin below the block keeps its distance from the next
-                    speaker's. The index is a safe key — the array is rebuilt
-                    from this block's text alone, so entry i is always the same
-                    sentence of the same block.
+                    Each sentence gets its own line; the block margin separates
+                    this segment from the next one. The index stays local to
+                    this segment, whose identity is keyed by the turn id above.
                   */}
                   {line.sentences.map((sentence, i) => (
                     <span key={i} className={styles.sentence}>
@@ -183,7 +184,8 @@ export function TwoWayPanels({
               type="button"
               className={cx(styles.controlBtn, styles.stopBtn)}
               onClick={onStop}
-              aria-label="Stop">
+              disabled={stopping}
+              aria-label={stopping ? 'Saving conversation' : 'Stop'}>
               ■
             </button>
           )}
@@ -227,6 +229,7 @@ export function TwoWayPanels({
           {headingInBar && <PanelHead panel={panels[1]} className={styles.headInBar} />}
         </div>
       )}
+      {recordingLabel && <div role="status" className={cx(styles.recordingStatus, !!recordingError && styles.recordingError)} title={recordingError}>{recordingLabel}</div>}
     </div>
   );
 }

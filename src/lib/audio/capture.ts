@@ -40,11 +40,13 @@ export type MicCaptureOptions = {
   onPcm: (pcm: ArrayBuffer) => void;
   /** 0..1 loudness, emitted per audio block for the level meter. */
   onLevel?: (level: number) => void;
+  /** Reuse the granted microphone stream for local conversation recording. */
+  onStream?: (stream: MediaStream) => Promise<void>;
 };
 
-export type MicCaptureError = 'permission-denied' | 'start-failed';
+export type MicCaptureError = 'permission-denied' | 'start-failed' | 'cancelled';
 
-export function useMicCapture({ onPcm, onLevel }: MicCaptureOptions) {
+export function useMicCapture({ onPcm, onLevel, onStream }: MicCaptureOptions) {
   const resampler = useRef(new Resampler(TARGET_SAMPLE_RATE));
   const pending = useRef<Int16Array[]>([]);
   const pendingSamples = useRef(0);
@@ -52,6 +54,8 @@ export function useMicCapture({ onPcm, onLevel }: MicCaptureOptions) {
   const contextRef = useRef<AudioContext | null>(null);
   const nodeRef = useRef<AudioWorkletNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const generationRef = useRef(0);
+  const testCleanupRef = useRef<(() => void) | null>(null);
 
   const [isStreaming, setIsStreaming] = useState(false);
   /** The rate the hardware actually gave us — surfaced for diagnostics. */
@@ -62,9 +66,11 @@ export function useMicCapture({ onPcm, onLevel }: MicCaptureOptions) {
   // fires asynchronously, so it only ever needs the value as of the last commit.
   const onPcmRef = useRef(onPcm);
   const onLevelRef = useRef(onLevel);
+  const onStreamRef = useRef(onStream);
   useEffect(() => {
     onPcmRef.current = onPcm;
     onLevelRef.current = onLevel;
+    onStreamRef.current = onStream;
   });
 
   const handleBlock = useCallback((mono: Int16Array, sampleRate: number) => {
@@ -109,12 +115,15 @@ export function useMicCapture({ onPcm, onLevel }: MicCaptureOptions) {
   }, []);
 
   const teardown = useCallback(() => {
+    generationRef.current++;
     nodeRef.current?.port.close();
     nodeRef.current?.disconnect();
     nodeRef.current = null;
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    testCleanupRef.current?.();
+    testCleanupRef.current = null;
 
     void contextRef.current?.close().catch(() => {});
     contextRef.current = null;
@@ -126,9 +135,20 @@ export function useMicCapture({ onPcm, onLevel }: MicCaptureOptions) {
   }, []);
 
   const start = useCallback(async (): Promise<MicCaptureError | null> => {
+    const generation = ++generationRef.current;
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_AUDIO_TEST_INPUT === '1') {
+        const { createTestAudioInput } = await import('./testInput');
+        const input = await createTestAudioInput();
+        if (generation !== generationRef.current) {
+          input.stream.getTracks().forEach((track) => track.stop());
+          input.close();
+          return 'cancelled';
+        }
+        stream = input.stream;
+        testCleanupRef.current = input.close;
+      } else stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
           echoCancellation: false,
@@ -137,11 +157,18 @@ export function useMicCapture({ onPcm, onLevel }: MicCaptureOptions) {
         },
       });
     } catch (err) {
+      if (generation !== generationRef.current) return 'cancelled';
       const name = (err as DOMException)?.name;
       return name === 'NotAllowedError' || name === 'SecurityError'
         ? 'permission-denied'
         : 'start-failed';
     }
+
+    if (generation !== generationRef.current) {
+      stream.getTracks().forEach((track) => track.stop());
+      return 'cancelled';
+    }
+    streamRef.current = stream;
 
     resampler.current.reset();
     pending.current = [];
@@ -164,6 +191,7 @@ export function useMicCapture({ onPcm, onLevel }: MicCaptureOptions) {
       if (context.state === 'suspended') await context.resume();
 
       await context.audioWorklet.addModule(WORKLET_URL);
+      if (generation !== generationRef.current) return 'cancelled';
 
       const source = context.createMediaStreamSource(stream);
       const node = new AudioWorkletNode(context, 'pcm-capture', {
@@ -177,9 +205,12 @@ export function useMicCapture({ onPcm, onLevel }: MicCaptureOptions) {
 
       nodeRef.current = node;
       streamRef.current = stream;
+      await onStreamRef.current?.(stream);
+      if (generation !== generationRef.current) return 'cancelled';
       setIsStreaming(true);
       return null;
     } catch (err) {
+      if (generation !== generationRef.current) return 'cancelled';
       console.warn('[audio] could not start capture', err);
       stream.getTracks().forEach((track) => track.stop());
       teardown();

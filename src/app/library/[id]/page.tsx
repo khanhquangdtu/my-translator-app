@@ -16,6 +16,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ChevronLeftIcon, PencilIcon } from '@/components/icons';
 import { AppBar, AppBarIcon, AppBarTitle, Cta, IconBtn, Seg } from '@/components/primitives';
 import { PromptDialog } from '@/components/PromptDialog';
+import { RecordingPlayer } from '@/components/RecordingPlayer';
 import { ActionBar, Screen, ScreenBody } from '@/components/Screen';
 import {
   SummaryFailed,
@@ -50,7 +51,7 @@ import { font } from '@/theme/tokens';
 
 import styles from './detail.module.css';
 
-type Pane = 'summary' | 'transcript';
+type Pane = 'summary' | 'transcript' | 'recording';
 
 export default function LibraryDetail() {
   const router = useRouter();
@@ -149,12 +150,17 @@ export default function LibraryDetail() {
         options={[
           { value: 'summary', label: '✨ Summary' },
           { value: 'transcript', label: 'Transcript' },
+          { value: 'recording', label: 'Audio' },
         ]}
         value={pane}
         onChange={setPane}
       />
 
-      {pane === 'summary' ? (
+      {pane === 'recording' ? (
+        <ScreenBody>
+          <RecordingPlayer sessionId={data.id} expected={data.has_recording} />
+        </ScreenBody>
+      ) : pane === 'summary' ? (
         <ScreenBody className={styles.summaryPane}>
           {status === 'generating' ? (
             <SummaryGenerating turnCount={countTurns(data)} model={OPENAI_SUMMARY_MODEL} />
@@ -226,6 +232,7 @@ export default function LibraryDetail() {
       <ConfirmDialog
         visible={deleting}
         title="Delete this session?"
+        message="The transcript, summary and audio recording on this device will be deleted."
         footnote="This cannot be undone."
         confirmLabel="Delete"
         onCancel={() => setDeleting(false)}

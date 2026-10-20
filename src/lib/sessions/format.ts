@@ -50,6 +50,8 @@ export type SessionData = {
   speaker_names?: Record<string, string>;
   /** AI summary, once one has been generated for this session */
   summary?: Summary | null;
+  /** The audio itself is stored on the recording device, separately from sync. */
+  has_recording?: boolean;
 };
 
 export type SessionSummary = {
@@ -152,7 +154,7 @@ export function autoTitle(data: SessionData): string {
       if (text) return text.length > 60 ? `${text.slice(0, 60)}…` : text;
     }
   }
-  return 'Empty session';
+  return data.has_recording ? 'Audio conversation' : 'Empty session';
 }
 
 // ─── Export formats ────────────────────────────────────────────────────

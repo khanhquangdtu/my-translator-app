@@ -14,9 +14,11 @@
  */
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useMicCapture } from '@/lib/audio/capture';
+import { ConversationRecorder, type RecordingState } from '@/lib/audio/recorder';
+import { listRecordings } from '@/lib/audio/recordings';
 import { hasOpenAIKey, hasSonioxKey } from '@/lib/config/capabilities';
 import { MOCK_ENABLED, MockEngine } from '@/lib/engine/mock';
 import { SonioxEngine } from '@/lib/engine/soniox';
@@ -45,24 +47,37 @@ function engineConfig(prefs: Prefs): EngineConfig {
   };
 }
 
-export type StartResult = 'ok' | 'not-configured' | 'permission-denied' | 'start-failed';
+export type StartResult = 'ok' | 'not-configured' | 'permission-denied' | 'start-failed' | 'cancelled';
 
 export function useSession() {
   const engineRef = useRef<TranslationEngine | null>(null);
   const autosaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSavedRevision = useRef(-1);
+  const lastSavedHadAudio = useRef(false);
+  const [recording, setRecording] = useState<{ state: RecordingState; error: string }>({ state: 'off', error: '' });
+  const [recorder] = useState(() => new ConversationRecorder((state, error = '') => setRecording({ state, error })));
+
+  const hasAudio = useCallback(async () => {
+    const id = useLive.getState().sessionId;
+    return id ? (await listRecordings(id).catch(() => [])).length > 0 : false;
+  }, []);
 
   const mic = useMicCapture({
     onPcm: (pcm) => engineRef.current?.sendAudio(pcm),
     onLevel: (level) => useLive.getState().setLevel(level),
+    onStream: async (stream) => {
+      const id = useLive.getState().sessionId;
+      if (id && useLive.getState().running && useSettings.getState().prefs.recordAudio) await recorder.start(stream, id);
+    },
   });
 
   const persist = useCallback(async (force = false) => {
     const live = useLive.getState();
     const { prefs } = useSettings.getState();
     if (!live.sessionId) return;
-    if (!force && live.revision === lastSavedRevision.current) return;
+    const audio = await hasAudio();
+    if (!force && live.revision === lastSavedRevision.current && audio === lastSavedHadAudio.current) return;
 
     const data = live.toSessionData(
       MOCK_ENABLED ? 'mock' : 'soniox',
@@ -74,17 +89,20 @@ export function useSession() {
     // Nothing captured yet — don't create a record. Otherwise a session that is
     // killed before its first turn (tab closed, crash, OS reclaim) leaves an
     // empty entry in the Library that the Stop flow never gets to clean up.
-    if (data.chunks.every((chunk) => chunk.segments.length === 0)) return;
+    if (data.chunks.every((chunk) => chunk.segments.length === 0) && !audio) return;
+    if (audio) data.has_recording = true;
 
     lastSavedRevision.current = live.revision;
     try {
       await saveSession(data);
+      lastSavedHadAudio.current = audio;
     } catch (err) {
       // Losing an autosave is recoverable; the next one re-runs from scratch.
       lastSavedRevision.current = -1;
+      lastSavedHadAudio.current = false;
       console.warn('[session] autosave failed', err);
     }
-  }, []);
+  }, [hasAudio]);
 
   const buildEngine = useCallback((): TranslationEngine => {
     const engine: TranslationEngine = MOCK_ENABLED ? new MockEngine() : new SonioxEngine();
@@ -107,6 +125,8 @@ export function useSession() {
   }, []);
 
   const start = useCallback(async (): Promise<StartResult> => {
+    if (useLive.getState().running) return 'ok';
+    setRecording({ state: 'off', error: '' });
     const { prefs } = useSettings.getState();
     if (!MOCK_ENABLED && !hasSonioxKey()) return 'not-configured';
 
@@ -126,6 +146,7 @@ export function useSession() {
     engine.connect(engineConfig(prefs));
 
     const micError = await mic.start();
+    if (micError === 'cancelled') { engine.disconnect(); return 'cancelled'; }
     if (micError) {
       deferSync(false);
       engine.disconnect();
@@ -151,6 +172,7 @@ export function useSession() {
    *  a new chunk of the same session, exactly as the desktop did. */
   const stop = useCallback(async () => {
     mic.stop();
+    await recorder.stop();
     engineRef.current?.disconnect();
     engineRef.current = null;
     stopIdentification();
@@ -174,7 +196,7 @@ export function useSession() {
     // whole session in one upload.
     deferSync(false);
     await persist(true);
-  }, [mic, persist]);
+  }, [mic, persist, recorder]);
 
   /**
    * Keep the session: flush it to disk and return to a cold Idle state.
@@ -189,7 +211,9 @@ export function useSession() {
       if (title?.trim()) useLive.getState().setTitle(title.trim());
       await stop();
       useLive.getState().reset();
+      setRecording({ state: 'off', error: '' });
       lastSavedRevision.current = -1;
+      lastSavedHadAudio.current = false;
       return id;
     },
     [stop]
@@ -204,6 +228,7 @@ export function useSession() {
   const discardSession = useCallback(async () => {
     const id = useLive.getState().sessionId;
     mic.stop();
+    await recorder.stop();
     engineRef.current?.disconnect();
     engineRef.current = null;
     stopIdentification();
@@ -215,13 +240,15 @@ export function useSession() {
     deactivateKeepAwake();
 
     useLive.getState().reset();
+    setRecording({ state: 'off', error: '' });
     lastSavedRevision.current = -1;
+    lastSavedHadAudio.current = false;
     // Ordered: the delete supersedes the deferred put (same outbox key) and
     // flushes on its own, so releasing afterwards cannot upload a transcript
     // this call exists to destroy.
     if (id) await deleteSession(id);
     deferSync(false);
-  }, [mic]);
+  }, [mic, recorder]);
 
   const retry = useCallback(async () => {
     await stop();
@@ -254,12 +281,27 @@ export function useSession() {
       if (tickRef.current) clearInterval(tickRef.current);
       if (autosaveRef.current) clearInterval(autosaveRef.current);
       engineRef.current?.disconnect();
+      const live = useLive.getState();
+      const id = live.sessionId;
+      if (live.running) {
+        live.setRunning(false);
+        live.setProvisional('', null, null);
+        live.setProvisionalDst('');
+        live.setLevel(0);
+        live.endChunk();
+        live.setStatus('disconnected');
+        stopIdentification();
+        // Track teardown happens on unmount too. Persist after its final blob.
+        void recorder.stop().then(() => {
+          if (useLive.getState().sessionId === id) return persist(true);
+        });
+      } else void recorder.stop();
       deactivateKeepAwake();
       // Navigating away mid-session must not leave uploads suppressed for the
       // rest of the page's life.
       deferSync(false);
     };
-  }, []);
+  }, [persist, recorder]);
 
   return {
     start,
@@ -276,5 +318,7 @@ export function useSession() {
      */
     persist,
     inputSampleRate: mic.inputSampleRate,
+    recording,
+    hasAudio,
   };
 }

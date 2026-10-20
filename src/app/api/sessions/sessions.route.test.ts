@@ -22,10 +22,16 @@ import type { SessionData } from '@/lib/sessions/format';
  * decision to skip has to be made here.
  */
 let mongod: MongoMemoryServer | undefined;
+// An isolated Docker Mongo can be supplied by CI/deploy checks instead of
+// downloading a platform-specific mongod binary. Never use a live database.
+let mongoUri = process.env.MONGODB_TEST_URI;
 try {
-  const { MongoMemoryServer } = await import('mongodb-memory-server');
-  mongod = await MongoMemoryServer.create();
-  process.env.MONGODB_URI = mongod.getUri();
+  if (!mongoUri) {
+    const { MongoMemoryServer } = await import('mongodb-memory-server');
+    mongod = await MongoMemoryServer.create();
+    mongoUri = mongod.getUri();
+  }
+  process.env.MONGODB_URI = mongoUri;
   process.env.MONGODB_DB = 'my_translator_test';
 } catch (err) {
   console.warn(`[sessions.route.test] no mongod available, skipping: ${(err as Error).message}`);
@@ -33,10 +39,10 @@ try {
 
 // Imported after the env is set: `server/mongo.ts` reads MONGODB_URI lazily,
 // but there is no reason to make that ordering subtle.
-const { GET, POST } = mongod
+const { GET, POST } = mongoUri
   ? await import('./route')
   : ({} as typeof import('./route'));
-const { GET: GET_ONE, DELETE: DELETE_ONE } = mongod
+const { GET: GET_ONE, DELETE: DELETE_ONE } = mongoUri
   ? await import('./[id]/route')
   : ({} as typeof import('./[id]/route'));
 
@@ -75,7 +81,7 @@ afterAll(async () => {
   await mongod?.stop();
 });
 
-describe.skipIf(!mongod)('/api/sessions', () => {
+describe.skipIf(!mongoUri)('/api/sessions', () => {
   it('rejects a request with no device id', async () => {
     const response = await GET(request('http://x/api/sessions'));
     expect(response.status).toBe(400);

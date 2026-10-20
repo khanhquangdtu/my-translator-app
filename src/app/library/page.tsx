@@ -194,7 +194,7 @@ export default function LibraryList() {
         title="Delete this session?"
         message={
           deleting
-            ? `“${deleting.title}” will be removed — transcript and summary alike.`
+            ? `“${deleting.title}” will be removed, including its transcript, summary and audio on this device.`
             : undefined
         }
         footnote="This cannot be undone."

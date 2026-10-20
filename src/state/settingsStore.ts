@@ -50,6 +50,7 @@ export type Prefs = {
   keepAwake: boolean;
   backgroundListening: boolean;
   costWarnings: boolean;
+  recordAudio: boolean;
 
   // ── AI summary ──
   summaryProvider: SummaryProvider;
@@ -114,6 +115,7 @@ const DEFAULTS: Prefs = {
   keepAwake: true,
   backgroundListening: true,
   costWarnings: true,
+  recordAudio: true,
 
   summaryProvider: 'openai',
   // English by default rather than AUTO: the app's own chrome is English, and a

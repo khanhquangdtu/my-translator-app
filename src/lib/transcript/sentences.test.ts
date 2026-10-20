@@ -32,27 +32,33 @@ describe('splitSentences', () => {
     expect(splitSentences(one)).toEqual([one]);
   });
 
-  it('keeps short sentences together rather than breaking at every one', () => {
+  it('keeps every short sentence on its own line', () => {
     expect(splitSentences('Yes. No. Maybe. I really am not sure about that one.')).toEqual([
-      'Yes. No. Maybe. I really am not sure about that one.',
+      'Yes.', 'No.', 'Maybe.', 'I really am not sure about that one.',
     ]);
   });
 
-  it('glues a short opener to the sentence that follows it', () => {
+  it('separates a short opener from the sentence that follows it', () => {
     expect(
       splitSentences('Right. The invoice was sent to the wrong address last Tuesday.')
-    ).toEqual(['Right. The invoice was sent to the wrong address last Tuesday.']);
+    ).toEqual(['Right.', 'The invoice was sent to the wrong address last Tuesday.']);
   });
 
-  it('glues a short closer to the sentence before it', () => {
+  it('separates a short closer from the sentence before it', () => {
     expect(
       splitSentences('The invoice was sent to the wrong address last Tuesday. Thanks.')
-    ).toEqual(['The invoice was sent to the wrong address last Tuesday. Thanks.']);
+    ).toEqual(['The invoice was sent to the wrong address last Tuesday.', 'Thanks.']);
   });
 
   it('does not break a decimal or a domain', () => {
     const text = 'The rate came out at 3.5 percent on example.com, which nobody expected at all.';
     expect(splitSentences(text)).toEqual([text]);
+  });
+
+  it('distinguishes a short answer from a numbered item', () => {
+    expect(splitSentences('No. Thanks.')).toEqual(['No.', 'Thanks.']);
+    expect(splitSentences('Please use invoice No. 5 for this order.'))
+      .toEqual(['Please use invoice No. 5 for this order.']);
   });
 
   it('does not break after an abbreviation', () => {
@@ -94,13 +100,26 @@ describe('splitSentences', () => {
     ]);
   });
 
-  it('breaks an over-long stretch at a clause when no sentence ever ends', () => {
+  it('does not split a single long sentence at a comma', () => {
     const text =
       'so then we went over to the other building because the meeting room there was free, and we sat down with the finance people to go through the numbers one more time, but nobody could find the original spreadsheet anywhere';
-    const lines = splitSentences(text);
-    expect(lines.length).toBeGreaterThan(1);
-    expect(lines.join(' ')).toBe(text);
-    for (const line of lines) expect(line.length).toBeLessThanOrEqual(180);
+    expect(splitSentences(text)).toEqual([text]);
+  });
+
+  it('separates short Vietnamese sentences', () => {
+    expect(splitSentences('Xin chào. Tôi là Nam. Bạn khỏe không? Cảm ơn!')).toEqual([
+      'Xin chào.', 'Tôi là Nam.', 'Bạn khỏe không?', 'Cảm ơn!',
+    ]);
+  });
+
+  it('separates short CJK sentences without spaces', () => {
+    expect(splitSentences('你好。谢谢！再见。')).toEqual(['你好。', '谢谢！', '再见。']);
+  });
+
+  it('preserves explicit line breaks without punctuation', () => {
+    expect(splitSentences('  Xin chào\r\n\nTôi là Nam\nCảm ơn  ')).toEqual([
+      'Xin chào', 'Tôi là Nam', 'Cảm ơn',
+    ]);
   });
 
   it('never loses or invents a character', () => {

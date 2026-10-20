@@ -22,6 +22,7 @@
 'use client';
 
 import { openDB, type IDBPDatabase } from 'idb';
+import { deleteRecordings } from '@/lib/audio/recordings';
 
 import { ownerHeaders } from '@/lib/storage/deviceId';
 import type { Summary } from '@/lib/summary/types';
@@ -135,6 +136,7 @@ export async function listSessions(): Promise<SessionSummary[]> {
 }
 
 export async function deleteSession(id: string): Promise<void> {
+  await deleteRecordings(id);
   const database = await db();
   const tx = database.transaction([SESSIONS, OUTBOX], 'readwrite');
   await Promise.all([

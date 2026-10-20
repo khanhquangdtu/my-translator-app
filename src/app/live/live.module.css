@@ -13,6 +13,18 @@
   color: var(--text-muted);
 }
 
+.recordOption {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px var(--gutter);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.recordOption input { width: 18px; height: 18px; accent-color: var(--accent); }
+.recordOption small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 11px; }
+
 .center {
   flex: 1;
   min-height: 0;

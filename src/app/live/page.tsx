@@ -51,7 +51,7 @@ import { hasOpenAIKey } from '@/lib/config/capabilities';
 import { MOCK_ENABLED } from '@/lib/engine/mock';
 import { readSegmentRange } from '@/lib/sessions/history';
 import { nextPage, splitWindow } from '@/lib/sessions/window';
-import { splitSentences } from '@/lib/transcript/sentences';
+import { panelLines } from '@/lib/transcript/panelLines';
 import { copyToClipboard, lockLandscape, unlockOrientation } from '@/lib/platform';
 import { speakerDisplayName, useLive, type Turn } from '@/state/liveStore';
 import { resolveLanguage, useSettings } from '@/state/settingsStore';
@@ -69,8 +69,6 @@ import styles from './live.module.css';
  * fresh block rather than extending the last one indefinitely.
  */
 const RUN_GAP_MS = 30_000;
-/** Shorter gap for two-way panels — tighter blocks keep columns readable. */
-const TWO_WAY_GAP_MS = 5_000;
 
 /** Slack for "the reader is still pinned to the newest line". */
 const FOLLOW_SLACK_PX = 24;
@@ -154,6 +152,8 @@ export default function LiveScreen() {
   const [speakersOpen, setSpeakersOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [askingToSave, setAskingToSave] = useState(false);
+  const [audioSaved, setAudioSaved] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [startAlert, setStartAlert] = useState<StartAlert>(null);
   /**
    * Turn ids whose original line is folded out. Live leads with the translation
@@ -366,6 +366,7 @@ export default function LiveScreen() {
   }, []);
 
   const onStart = useCallback(async () => {
+    setAudioSaved(false);
     // A new session starts folded shut. Cleared here rather than in an effect
     // watching `turns` — a start is exactly the event that means "this is a new
     // transcript".
@@ -403,16 +404,21 @@ export default function LiveScreen() {
 
   // Stop never discards silently and never saves silently — it always asks.
   const onStop = useCallback(async () => {
+    if (stopping) return;
+    setStopping(true);
     setOverflowOpen(false);
-    await session.stop();
-    // Nothing was captured — there is no decision to put to the user, and an
-    // empty session in the Library is just litter.
-    if (useLive.getState().turns.length === 0) {
-      await session.discardSession();
-      return;
-    }
-    setAskingToSave(true);
-  }, [session]);
+    try {
+      await session.stop();
+      const audio = await session.hasAudio();
+      setAudioSaved(audio);
+      // Keep audio-only conversations even if recognition produced no text.
+      if (useLive.getState().turns.length === 0 && !audio) {
+        await session.discardSession();
+        return;
+      }
+      setAskingToSave(true);
+    } finally { setStopping(false); }
+  }, [session, stopping]);
 
   const onSave = useCallback(
     async (title: string) => {
@@ -420,9 +426,9 @@ export default function LiveScreen() {
       const id = await session.keepSession(title);
       // The summary runs detached: the user is free to leave this screen, and
       // Library detail picks the result up whenever they open the session.
-      if (id && summaryAvailable) generateInBackground(id);
+      if (id && summaryAvailable && turns.length > 0) generateInBackground(id);
     },
-    [summaryAvailable, session]
+    [summaryAvailable, session, turns.length]
   );
 
   const onDiscard = useCallback(async () => {
@@ -471,122 +477,14 @@ export default function LiveScreen() {
   }, [running]);
 
   const twoWayPanelData = useMemo<[TwoWayPanelData, TwoWayPanelData]>(() => {
-    // Position of each turn in `turns`, built once per recompute.
-    //
-    // The interruption check below needs to know where two turns sit relative
-    // to each other in the full stream. It used to answer that with a
-    // `findIndex` that allocated a string and ran `.split()` on every
-    // comparison, plus an `indexOf` — for every turn, over the whole 1000-turn
-    // array, twice (once per panel), at token rate. One map turns that from
-    // quadratic into a lookup, on the same thread the audio pipeline runs on.
-    const indexOfTurn = new Map<number, number>();
-    for (let i = 0; i < turns.length; i++) indexOfTurn.set(turns[i].id, i);
-
-    const buildLines = (lang: string) => {
-      const own = turns.filter((t) => t.language === lang);
-
-      // Group consecutive same-speaker turns within RUN_GAP_MS into one block.
-      // A different speaker interrupting (in any language) also breaks the block,
-      // so we check against the full turn list, not just this language's subset.
-      type Block = {
-        id: string;
-        firstTurnId: number;
-        texts: string[];
-        lastCreatedAt: number;
-        speaker: string | null;
-      };
-      const blocks: Block[] = [];
-
-      for (const t of own) {
-        // Two-way panels exist so each reader sees the OTHER language. Show
-        // only the translation; falling back to the source would put the
-        // wrong language in the panel and confuse the reader.
-        const text = t.dst;
-        if (!text) continue;
-        const prev = blocks[blocks.length - 1];
-
-        // Does this turn continue the previous block?
-        // Break if: no previous, different speaker, too long since last turn,
-        // or another speaker spoke in between (check the full turns array).
-        let interrupted = false;
-        if (prev) {
-          // Look for any turn from a *different* speaker that landed between
-          // the previous block's last turn and this one.
-          const prevIdx = indexOfTurn.get(prev.firstTurnId) ?? -1;
-          const curIdx = indexOfTurn.get(t.id) ?? -1;
-          if (prevIdx >= 0 && curIdx > prevIdx + 1) {
-            for (let k = prevIdx + 1; k < curIdx; k++) {
-              if (turns[k].speaker !== t.speaker) { interrupted = true; break; }
-            }
-          }
-        }
-
-        const continues =
-          prev &&
-          prev.speaker === t.speaker &&
-          t.createdAt - prev.lastCreatedAt <= TWO_WAY_GAP_MS &&
-          !interrupted;
-
-        if (continues && prev) {
-          prev.texts.push(text);
-          prev.lastCreatedAt = t.createdAt;
-          // Keep the first turn's id as block key
-        } else {
-          blocks.push({
-            id: `t${t.id}`,
-            firstTurnId: t.id,
-            texts: [text],
-            lastCreatedAt: t.createdAt,
-            speaker: t.speaker,
-          });
-        }
-      }
-
-      const lines = blocks
-        .slice(-prefs.maxLinesKept)
-        .reverse()
-        .map((b, i) => ({
-          id: b.id,
-          sentences: splitSentences(b.texts.join(' ')),
-          state: (i < 2 ? 'final' : 'old') as 'live' | 'final' | 'old',
-        }));
-
-      if (provisional?.text && provisional.language === lang) {
-        // Show the source text live while speaking; once the translation
-        // preview arrives, switch to it so the reader sees the target language.
-        //
-        // Only if that preview is going the same way as this panel. A frame can
-        // still be carrying the tail of the *other* speaker's translation while
-        // these first words come in, and showing it here would put the previous
-        // turn's text above the wrong column for as long as it takes the real
-        // preview to arrive.
-        const dstMatches = !provisionalDstLang || provisionalDstLang === lang;
-        const liveText = (dstMatches && provisionalDst) || provisional.text;
-        // Append to the newest block if same speaker is still talking
-        const head = lines[0];
-        const headSpeaker = blocks.length > 0 ? blocks[blocks.length - 1].speaker : null;
-        if (head && provisional.speaker === headSpeaker) {
-          /*
-           * Into the same block, but onto a line of its own.
-           *
-           * It used to be concatenated onto the head block's text, which read
-           * as one sentence running into the next — "Now I'll move on to
-           * Revenue is up twelve percent year over year." — because the words
-           * still being spoken have no full stop to separate them from the
-           * finished sentence they were glued to. Its own line is what it
-           * actually is: the same speaker, still talking, one utterance later.
-           * Staying inside the block is what keeps it spaced as a continuation
-           * rather than as a new turn.
-           */
-          head.sentences = [...splitSentences(liveText), ...head.sentences];
-          head.state = 'live';
-        } else {
-          lines.unshift({ id: 'provisional', sentences: splitSentences(liveText), state: 'live' });
-        }
-      }
-
-      return lines;
-    };
+    const buildLines = (language: string) => panelLines({
+      turns,
+      language,
+      maxLines: prefs.maxLinesKept,
+      provisional,
+      provisionalDst,
+      provisionalDstLang,
+    });
 
     // Each panel can independently swap its direction.
     const make = (index: number, defaultSrc: string, defaultTgt: string, srcKey: 'a' | 'b', tgtKey: 'a' | 'b') => {
@@ -625,7 +523,7 @@ export default function LiveScreen() {
   // reading AUTO says nothing about which language the panel below it is in.
   const displayPair = `${shortCode(resolvedA)} ↔ ${shortCode(resolvedB)}`;
   const saveSubtitle = [
-    `${Math.max(1, Math.round(elapsedSec / 60))} minutes`,
+    elapsedSec < 60 ? `${elapsedSec} sec` : `${Math.round(elapsedSec / 60)} min`,
     `${turns.length} turns`,
     speakerOrder.length > 0 ? `${speakerOrder.length} speakers` : null,
     displayPair,
@@ -741,12 +639,20 @@ export default function LiveScreen() {
           onFontUp={() => adjustFont(4)}
           onFontDown={() => adjustFont(-4)}
           onSwapPanels={() => setPanelsReversed((r) => !r)}
+          stopping={stopping}
+          recordingLabel={session.recording.state === 'recording'
+            ? `● REC · ${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}`
+            : session.recording.state === 'saving' ? 'Saving audio…'
+              : session.recording.state === 'error' ? 'Audio unavailable — transcript continues'
+                : prefs.recordAudio ? 'Preparing audio…' : 'Audio recording off'}
+          recordingError={session.recording.error}
         />
         {/* Dialogs must stay mounted so Save appears after Stop. */}
         <SaveDialog
           visible={askingToSave}
           subtitle={saveSubtitle}
           summaryEnabled={summaryAvailable}
+          audioSaved={audioSaved}
           onSave={onSave}
           onDiscard={onDiscard}
         />
@@ -799,6 +705,7 @@ export default function LiveScreen() {
       {/* What is left of the session that just ended — the panels carry no
           chrome of their own, so an error only becomes readable back here. */}
       {error ? <Banner tone="error" glyph="⚠" text={error} /> : null}
+      {session.recording.error ? <Banner tone="error" glyph="⚠" text={session.recording.error} /> : null}
 
       {Object.entries(suggestedNames).map(([id, suggestion]) => (
         <Banner
@@ -834,13 +741,18 @@ export default function LiveScreen() {
         <p className={styles.reassurance}>Nothing is lost — your transcript is already saved.</p>
       ) : null}
 
+      <label className={styles.recordOption}>
+        <input type="checkbox" checked={prefs.recordAudio} onChange={(event) => setPref('recordAudio', event.target.checked)} />
+        <span>Record conversation audio<small>Saved on this device · listen again in Library</small></span>
+      </label>
+
       <div className={styles.strip}>
         <LevelMeter />
         <span className={styles.stripText}>Mic level — quiet</span>
       </div>
 
       <ActionBar>
-        <Cta label="▶  Start" flex={1} onPress={onStart} />
+        <Cta label={stopping ? 'Saving…' : '▶  Start'} disabled={stopping} flex={1} onPress={onStart} />
         <IconBtn
           glyph="A⁺"
           accessibilityLabel={`Text size ${prefs.fontSize}px — tap to increase`}
@@ -848,7 +760,7 @@ export default function LiveScreen() {
         />
       </ActionBar>
 
-      {MOCK_ENABLED ? <span className={styles.mockBadge}>MOCK ENGINE</span> : null}
+      {MOCK_ENABLED ? <span className={styles.mockBadge}>{process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_AUDIO_TEST_INPUT === '1' ? 'MOCK ENGINE · SYNTHETIC AUDIO TEST' : 'MOCK ENGINE'}</span> : null}
 
       {/* ── ⋯ overflow: destinations above, session actions below ── */}
       <Sheet visible={overflowOpen} onClose={() => setOverflowOpen(false)}>
@@ -912,6 +824,7 @@ export default function LiveScreen() {
         visible={askingToSave}
         subtitle={saveSubtitle}
         summaryEnabled={summaryAvailable}
+        audioSaved={audioSaved}
         onSave={onSave}
         onDiscard={onDiscard}
       />

@@ -1,0 +1,20 @@
+.recording {
+  margin: 12px var(--gutter);
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.recording h2 { font-size: 16px; margin: 0 0 6px; }
+.note { color: var(--text-muted); font-size: 12px; margin-bottom: 14px; }
+.clip + .clip { margin-top: 18px; }
+.heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.heading a { color: var(--accent); text-decoration: underline; padding: 6px 0; }
+.controls { display: flex; align-items: center; gap: 10px; }
+.controls button { flex: 0 0 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: #fff; }
+.controls input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.controls button:disabled, .controls input:disabled { opacity: 0.45; }
+.time { flex-shrink: 0; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.error { color: var(--error, #ff6b6b); margin-top: 10px; }

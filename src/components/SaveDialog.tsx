@@ -20,6 +20,7 @@ export function SaveDialog({
   visible,
   subtitle,
   summaryEnabled,
+  audioSaved = false,
   onDiscard,
   onSave,
 }: {
@@ -28,6 +29,7 @@ export function SaveDialog({
   subtitle: string;
   /** false where no summary key is configured — don't promise one then */
   summaryEnabled: boolean;
+  audioSaved?: boolean;
   onDiscard: () => void;
   /** `title` is empty when the user didn't name it — the caller falls back to
    *  the first translated sentence. */
@@ -43,6 +45,7 @@ export function SaveDialog({
         <div role="dialog" aria-modal className={styles.dialog}>
           <h2 className={styles.title}>Save this conversation?</h2>
           <p className={styles.sub}>{subtitle}</p>
+          {audioSaved && <p className={styles.fine}>Your audio recording will be kept on this device with the conversation. Listen or download it from Library → Audio.</p>}
           <p className={styles.fine}>
             {summaryEnabled ? (
               <>

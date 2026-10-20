@@ -3,6 +3,29 @@
 Real-time speech translation in the browser. Put the phone down near whoever is
 talking, tap **Start**, and read the translation as it arrives.
 
+## Conversation audio
+
+**Record conversation audio** on the Live screen records the same microphone
+used for translation. It is enabled by default and can be turned off before
+Start. The REC indicator shows when audio is being saved. Stop waits for the
+last audio chunk; Save keeps the recording with the conversation, and Delete
+removes its audio too. Audio-only conversations can also be saved.
+
+Open **Library → conversation → Audio** to play, pause, seek or download the
+recording. Audio is stored locally in IndexedDB, separately from transcript
+sync; it is available on the device and browser where it was recorded. Clearing
+site data removes it, so download recordings you want to keep elsewhere.
+The browser selects a supported format (WebM/Opus, MP4 or Ogg). If the browser
+cannot record or device storage fills up, the app reports it while translation
+continues. Interrupted recordings retain the parts already committed.
+
+For deterministic browser checks without a microphone or provider credits,
+start dev with both `NEXT_PUBLIC_MOCK_ENGINE=1` and
+`NEXT_PUBLIC_AUDIO_TEST_INPUT=1`. This uses a generated tone with the real
+capture, MediaRecorder, storage and playback paths, labelled
+**SYNTHETIC AUDIO TEST**. The synthetic input is disabled in production.
+Recorder/storage regression checks: `npm test -- src/lib/audio`.
+
 A web port of [`rovato`](../rovato), the Expo/React Native build, matching it
 screen for screen. Next.js 15 App Router, client-rendered, installable as a PWA.
 

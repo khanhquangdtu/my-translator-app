@@ -135,7 +135,11 @@ function TurnViewImpl({
                       lineHeight: `${fontSize * 0.7 * 1.45}px`,
                       color: srcColor,
                     }}>
-                    {secondary}
+                    {splitSentences(secondary).map((sentence, i) => (
+                      <span key={i} className={styles.sentence}>
+                        {sentence}
+                      </span>
+                    ))}
                   </span>
                 ) : null}
               </>
