@@ -68,7 +68,7 @@ export function useSession() {
     onLevel: (level) => useLive.getState().setLevel(level),
     onStream: async (stream) => {
       const id = useLive.getState().sessionId;
-      if (id && useLive.getState().running && useSettings.getState().prefs.recordAudio) await recorder.start(stream, id);
+      if (id && useLive.getState().running) await recorder.start(stream, id);
     },
   });
 

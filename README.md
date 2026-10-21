@@ -5,11 +5,10 @@ talking, tap **Start**, and read the translation as it arrives.
 
 ## Conversation audio
 
-**Record conversation audio** on the Live screen records the same microphone
-used for translation. It is enabled by default and can be turned off before
-Start. The REC indicator shows when audio is being saved. Stop waits for the
-last audio chunk; Save keeps the recording with the conversation, and Delete
-removes its audio too. Audio-only conversations can also be saved.
+Conversation audio is recorded automatically using the same microphone as
+translation. The Live screen has no recording toggle or REC timer. Stop waits
+for the last audio chunk; Save keeps the recording with the conversation, and
+Delete removes its audio too. Audio-only conversations can also be saved.
 
 Open **Library → conversation → Audio** to play, pause, seek or download the
 recording. Audio is stored locally in IndexedDB, separately from transcript
