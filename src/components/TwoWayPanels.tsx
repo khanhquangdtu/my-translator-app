@@ -13,10 +13,9 @@
  */
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useWindowSize } from '@/hooks/useWindowSize';
-import { recentPanelLines } from '@/lib/transcript/panelLines';
 import { color } from '@/theme/tokens';
 
 import { ArrowRightIcon } from './icons';
@@ -214,47 +213,25 @@ export function TwoWayPanels({
 }
 
 function PanelTranscript({ lines, fontSize }: { lines: TwoWayLine[]; fontSize: number }) {
-  const [expanded, setExpanded] = useState(false);
-  const listId = useId();
-  const listRef = useRef<HTMLDivElement>(null);
-  const visibleLines = expanded ? lines : recentPanelLines(lines);
-  const canExpand = lines.reduce((count, line) => count + line.sentences.length, 0) > 3;
-
-  useEffect(() => {
-    if (!expanded && listRef.current) listRef.current.scrollTop = 0;
-  }, [expanded, lines]);
-
   return (
-    <>
-      <div id={listId} ref={listRef} className={cx(styles.lines, 'noscrollbar')}>
-        {visibleLines.map((line) => (
-          <span
-            key={line.id}
-            className={cx(
-              styles.line,
-              line.state === 'live' && styles.lineLive,
-              line.state === 'old' && styles.lineOld
-            )}
-            style={{ fontSize, lineHeight: `${fontSize * 1.5}px` }}>
-            {line.sentences.map((sentence, i) => (
-              <span key={i} className={styles.sentence}>
-                {sentence}
-              </span>
-            ))}
-          </span>
-        ))}
-      </div>
-      {(canExpand || expanded) && (
-        <button
-          type="button"
-          className={styles.transcriptToggle}
-          aria-expanded={expanded}
-          aria-controls={listId}
-          onClick={() => setExpanded((value) => !value)}>
-          {expanded ? 'Show latest 3 sentences' : 'Show full transcript'}
-        </button>
-      )}
-    </>
+    <div className={cx(styles.lines, 'noscrollbar')}>
+      {lines.map((line) => (
+        <span
+          key={line.id}
+          className={cx(
+            styles.line,
+            line.state === 'live' && styles.lineLive,
+            line.state === 'old' && styles.lineOld
+          )}
+          style={{ fontSize, lineHeight: `${fontSize * 1.5}px` }}>
+          {line.sentences.map((sentence, i) => (
+            <span key={i} className={styles.sentence}>
+              {sentence}
+            </span>
+          ))}
+        </span>
+      ))}
+    </div>
   );
 }
 

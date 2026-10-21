@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Turn } from '@/state/liveStore';
-import type { TwoWayLine } from '@/components/TwoWayPanels';
 
-import { panelLines, recentPanelLines } from './panelLines';
+import { panelLines } from './panelLines';
 
 function turn(id: number, dst: string, language = 'en'): Turn {
   return {
@@ -17,48 +16,16 @@ const defaults = {
   provisionalDst: null, provisionalDstLang: null,
 };
 
-describe('recentPanelLines', () => {
-  it('keeps the latest three short utterances in newest-first order', () => {
-    const lines = panelLines({ ...defaults, turns: [
-      turn(1, 'older'), turn(2, 'hello'), turn(3, 'hi'), turn(4, 'good morning'),
-    ] });
-    expect(recentPanelLines(lines).flatMap((line) => line.sentences))
-      .toEqual(['good morning', 'hi', 'hello']);
-  });
-
-  it('counts sentences rather than segments and keeps the newest end of each segment', () => {
-    const lines: TwoWayLine[] = [
-      { id: 'new', sentences: ['Third.', 'Fourth.'], state: 'final' },
-      { id: 'old', sentences: ['First.', 'Second.'], state: 'old' },
-    ];
-    expect(recentPanelLines(lines)).toEqual([
-      { id: 'new', sentences: ['Fourth.', 'Third.'], state: 'final' },
-      { id: 'old', sentences: ['Second.'], state: 'old' },
-    ]);
-    expect(lines[0].sentences).toEqual(['Third.', 'Fourth.']);
-    expect(lines[1].sentences).toEqual(['First.', 'Second.']);
-  });
-
-  it('includes the live preview within the three-sentence budget', () => {
-    const lines = panelLines({
-      ...defaults, turns: [turn(1, 'One. Two. Three.')],
-      provisional: { text: 'Four', speaker: 'spk-1', speakerIndex: 0, language: 'en' },
-    });
-    expect(recentPanelLines(lines)).toEqual([
-      { id: 'provisional', sentences: ['Four'], state: 'live' },
-      { id: 't1', sentences: ['Three.', 'Two.'], state: 'final' },
-    ]);
-  });
-
-  it('preserves long sentences without truncation and supports fewer than three sentences', () => {
-    const text = 'A long sentence with many words '.repeat(30).trim();
-    const lines = panelLines({ ...defaults, turns: [turn(1, text)] });
-    expect(recentPanelLines(lines)).toEqual(lines);
-    expect(recentPanelLines([])).toEqual([]);
-  });
-});
-
 describe('panelLines', () => {
+  it('keeps more than three sentences and segments available to the panel', () => {
+    const lines = panelLines({ ...defaults, turns: [
+      turn(1, 'One. Two. Three. Four.'), turn(2, 'Five.'),
+      turn(3, 'Six.'), turn(4, 'Seven.'),
+    ] });
+    expect(lines.flatMap((line) => line.sentences))
+      .toEqual(['Seven.', 'Six.', 'Five.', 'One.', 'Two.', 'Three.', 'Four.']);
+  });
+
   it('keeps same-speaker segments separate even without punctuation, newest first', () => {
     const lines = panelLines({ ...defaults, turns: [turn(1, 'Xin chào'), turn(2, 'Tôi là Nam')] });
     expect(lines.map((line) => line.sentences)).toEqual([['Tôi là Nam'], ['Xin chào']]);

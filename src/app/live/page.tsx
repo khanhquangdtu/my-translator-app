@@ -644,7 +644,7 @@ export default function LiveScreen() {
             ? undefined
             : session.recording.state === 'saving' ? 'Saving audio…'
               : session.recording.state === 'error' ? 'Audio unavailable — transcript continues'
-                : 'Preparing audio…'}
+                : prefs.recordAudio ? 'Preparing audio…' : 'Audio recording off'}
           recordingError={session.recording.error}
         />
         {/* Dialogs must stay mounted so Save appears after Stop. */}
@@ -740,6 +740,11 @@ export default function LiveScreen() {
       {error ? (
         <p className={styles.reassurance}>Nothing is lost — your transcript is already saved.</p>
       ) : null}
+
+      <label className={styles.recordOption}>
+        <input type="checkbox" checked={prefs.recordAudio} onChange={(event) => setPref('recordAudio', event.target.checked)} />
+        <span>Record conversation audio<small>Saved on this device · listen again in Library</small></span>
+      </label>
 
       <div className={styles.strip}>
         <LevelMeter />
