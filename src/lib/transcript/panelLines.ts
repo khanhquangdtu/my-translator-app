@@ -3,6 +3,20 @@ import type { Provisional, Turn } from '@/state/liveStore';
 
 import { splitSentences } from './sentences';
 
+/** Latest three sentences, including the newest end of a multi-sentence segment. */
+export function recentPanelLines(lines: TwoWayLine[]): TwoWayLine[] {
+  const recent: TwoWayLine[] = [];
+  let remaining = 3;
+  for (const line of lines) {
+    if (remaining === 0) break;
+    const sentences = line.sentences.slice(-remaining).reverse();
+    if (sentences.length === 0) continue;
+    recent.push({ ...line, sentences });
+    remaining -= sentences.length;
+  }
+  return recent;
+}
+
 /** Keep each recognised segment separate, as in the desktop transcript UI. */
 export function panelLines({
   turns,
